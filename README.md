@@ -2,7 +2,20 @@
 
 Public, unauthenticated catalog. Describe a problem to match worker agents and copyable pipeline YAML, or browse the library.
 
-## Run v1
+This site is a discovery and copy catalog. It does not create agents or pipelines in your Harness account. To run an agent, paste the YAML into your project or open the agent in the Harness console.
+
+## Worker Agents
+
+[Worker Agents](https://developer.harness.io/docs/platform/harness-ai/core-capabilities/in-your-pipelines/worker-agent/) are AI steps that run inside Harness pipelines. Each agent combines instructions, an LLM (model) connector, optional MCP connectors, and inputs into a reusable, governed step you can add to CI, CD, IaCM, STO, SCS, or Custom stages.
+
+In the Harness console, open **AI → Worker Agents**. The catalog has:
+
+- **Marketplace** — Harness Certified and Harness Managed agents (this library includes the stable managed set)
+- **Custom** — agents your team creates in the project
+
+You need pipeline, connector, and secret permissions, plus a Model Connector (Anthropic, OpenAI, Bedrock, and similar). MCP is optional unless the agent calls platform or SCM tools. Full setup, RBAC, and how to create agents from the UI, Harness AI Chat, or IDE via MCP are in the [Worker Agents overview](https://developer.harness.io/docs/platform/harness-ai/core-capabilities/in-your-pipelines/worker-agent/).
+
+## Run this library
 
 ```bash
 cd web
