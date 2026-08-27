@@ -1,0 +1,73 @@
+version: 1
+agent:
+  step:
+    group:
+      steps:
+        - name: Agent
+          if: <+Always>
+          id: agent
+          run:
+            container:
+              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest
+            env:
+              PLUGIN_MAX_TURNS: 150
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llmConnector.id}}
+              ANTHROPIC_MODEL: ${{inputs.modelName}}
+              PLUGIN_ALLOWED_DOMAINS: ${{inputs.allowedDomains}}
+              PLUGIN_TASK: |
+                You are a Docker image tag inspector. Inspect the public Docker Hub
+                repository ${{inputs.dockerRepository}} and identify image tags older
+                than ${{inputs.daysThreshold}} days.
+
+                WORKFLOW
+                1. Query:
+                   https://hub.docker.com/v2/repositories/${{inputs.dockerRepository}}/tags?page_size=100
+                2. Follow every pagination link from the API. Do not stop after the
+                   first page.
+                3. Parse tag names, last_updated timestamps, and available size data.
+                4. Calculate tag age from the current UTC time and classify tags older
+                   than the threshold.
+                5. Report total tags, old tags, exact ages, and age groups (30-60,
+                   60-90, 90+ days when applicable).
+                6. Recommend review candidates, but never delete a tag. Treat aliases
+                   such as latest, release tags, and semantic versions cautiously.
+                7. Estimate storage savings only when the API provides usable size
+                   data. State the assumptions and do not count shared layers as
+                   uniquely reclaimable storage.
+
+                RULES
+                - This agent supports public Docker Hub repositories only.
+                - Sort old tags from oldest to newest.
+                - Handle API and pagination failures explicitly.
+                - Never invent timestamps, ages, or storage savings.
+                - Never perform registry writes or deletion calls.
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    allowedDomains:
+      type: string
+      default: "hub\\.docker\\.com|registry\\.hub\\.docker\\.com"
+    dockerRepository:
+      type: string
+      required: true
+    daysThreshold:
+      type: string
+      required: true
+      default: "30"
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - dockerRepository
+        - daysThreshold
+        - allowedDomains

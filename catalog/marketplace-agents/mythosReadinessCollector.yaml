@@ -1,0 +1,503 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier or inference-profile ARN.
+        placeholder: arn:aws:bedrock:us-east-1::application-inference-profile/...
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      required: true
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount. Include a Harness MCP connector to fetch platform data.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    account_id:
+      type: string
+      label: Account ID
+      required: true
+      ui:
+        tooltip: Enter the Harness account ID for data collection scope.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    org_id:
+      type: string
+      label: Org ID
+      required: true
+      ui:
+        tooltip: Enter the Harness organization ID for data collection scope.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    project_id:
+      type: string
+      label: Project ID
+      required: true
+      ui:
+        tooltip: Enter the Harness project ID for data collection scope.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - model_name
+        - mcp_connectors
+    - title: Harness Scope
+      items:
+        - account_id
+        - org_id
+        - project_id
+  id: mythosReadinessCollector
+  name: Mythos Readiness Collection
+  description: AI agent that collects raw Harness platform configuration data (pipelines, security testing, deployments, governance, and more) and emits it as a fixed-schema JSON readiness snapshot.
+  version: 1
+  author: Harness Customer Success
+  agent:
+    group:
+      steps:
+        - name: Mythos Readiness Data Collector
+          if: <+Always>
+          id: mythosReadinessCollector
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_TASK: |
+                  You are a Harness platform data collection agent. Your ONLY job is to
+                  fetch raw data from Harness MCP and output it in a strict JSON format.
+                  Do NOT interpret, estimate, or score anything. Fetch facts only.
+
+                  Account ID: ${{inputs.account_id}}
+                  Organization: ${{inputs.org_id}}
+                  Project: ${{inputs.project_id}}
+
+                  ## RULE 1 - OUTPUT SCHEMA IS FIXED AND NON-NEGOTIABLE
+                  The output JSON MUST use EXACTLY the field names and top-level structure
+                  shown in the OUTPUT FORMAT section at the bottom of this prompt.
+
+                  FORBIDDEN:
+                    - Renaming sections (e.g. "section1_pipeline_inventory" is WRONG)
+                    - Adding narrative text before or after the JSON
+                    - Omitting any field from the schema
+                    - Adding fields not in the schema
+                    - Nesting data differently than shown
+
+                  CORRECT top-level keys (exactly these 10, nothing else):
+                    meta, pipelines, sto, executions, deployments,
+                    supply_chain, infrastructure, secrets, governance,
+                    runtime_and_response
+
+                  Agent 2 reads this JSON by exact field path. A single renamed key
+                  breaks all scoring for that dimension.
+
+                  ## RULE 2 - COLLECTION ERRORS MUST BE HUMAN-READABLE
+                  Every entry in meta.collection_errors must be a plain English sentence
+                  that a non-technical customer could understand.
+
+                  WRONG: "trigger_data_checked_for_4_of_29_pipelines_only"
+                  RIGHT: "Trigger configuration could only be confirmed for 4 of 29
+                          pipelines; remaining pipelines shown as no trigger detected."
+
+                  WRONG: "iacm_module_get_returned_error"
+                  RIGHT: "IaCM module configuration could not be retrieved; IaCM fields
+                          set to null."
+
+                  WRONG: "policy_set resource does not support account scope"
+                  RIGHT: "OPA governance policies could only be checked for one project;
+                          account-wide OPA status is unknown."
+
+                  ## ADDITIONAL STRICT RULES
+                  - Never estimate or approximate. If data is unavailable, use null.
+                  - Never calculate percentages or scores. Output raw counts only.
+                  - Never say "approximately" or "about". Use exact numbers or null.
+                  - Query each section independently and completely before moving on.
+                  - If an MCP call fails or returns too much data, record null for that
+                    field, add a plain-English note to meta.collection_errors, and
+                    continue. Never retry a failed call except for Section 4
+                    deployment timestamps (see Section 4 for the one allowed retry).
+                  - CRITICAL: Always request summary counts and metadata only. Never
+                    request full execution logs, full run details, or full pipeline YAML.
+                    If a tool returns more than you need, extract only the fields listed
+                    below and discard the rest immediately.
+                  - HARD LIMIT: If any single MCP tool call returns a response larger
+                    than 500KB, stop processing that call immediately, record null for
+                    all fields in that section, add a plain-English note to
+                    meta.collection_errors, and move to the next section.
+
+                  ## MCP CALL PARAMETERS - MANDATORY
+                  Apply to EVERY MCP tool call without exception:
+                    - compact: true at all times
+                    - size: 20 maximum page size at all times
+                    - Never set compact: false
+                    - Never set size above 20
+                    - For security_issue queries: filter severity to CRITICAL and HIGH
+                      only, filter date to last 60 days only, never fetch remediation
+                      details or raw scan output
+
+                  ## SECTION 1 - PIPELINE INVENTORY
+                  Goal: get a complete list of all pipelines with stage type metadata.
+
+                  Step 1a: Request pipeline list with compact: true, size: 20.
+                  Step 1b: If the response indicates more pages exist, fetch page 2 with
+                           compact: true, size: 20.
+                  Step 1c: If more pages still exist, fetch page 3. Stop after page 3
+                           regardless.
+                  Step 1d: Record pipelines.total_count as follows:
+                           - FIRST choice: use the total count from the API response
+                             metadata (the field that says how many total records exist,
+                             not how many were returned on this page).
+                           - SECOND choice (if metadata total is not present): use the
+                             sum of all pipelines fetched across all pages.
+                           - Record pipelines.with_triggers as the count of pipelines
+                             where has_trigger = true across the full inventory.
+                           - If the API returned "X total" in metadata, record that as
+                             total_count even if you only fetched 60.
+                  Step 1e: For each pipeline, record ONLY:
+                    - id (identifier string)
+                    - name (display name)
+                    - stage types present as a list (CI, CD, STO, SCS, IACM, Custom)
+                    - has_trigger: true if any trigger is configured, false otherwise,
+                      null if trigger data was not available for this pipeline
+                    - has_sto: true if any STO-related step is present (native STO
+                      orchestration steps, CustomIngest steps, OR Run steps invoking
+                      known security scanner scripts), false otherwise
+                    - has_cd: true if CD stage present, false otherwise
+                    - has_scs: true if SCS stage present, false otherwise
+                    - has_iacm: true if IACM stage present, false otherwise
+
+                  Do NOT fetch pipeline YAML, execution history, or step-level details.
+
+                  ## SECTION 2 - STO CONFIGURATION
+                  Goal: for every pipeline identified as has_sto=true in Section 1,
+                  collect full security scanning configuration.
+
+                  CRITICAL - THREE TYPES OF STO COVERAGE TO DETECT:
+
+                    TYPE 1 - Native STO steps: steps with a Harness STO scanner type
+                      (e.g. type: Sonarqube, type: AquaTrivy, type: Semgrep, etc.)
+
+                    TYPE 2 - CustomIngest steps: steps with type: CustomIngest and
+                      mode: ingestion. The scanner name should be inferred from the
+                      step name or the companion Run step name (e.g. a step named
+                      "ORCA Scan Results" -> scanner name "orca").
+
+                    TYPE 3 - Run steps invoking known security scanners: Run steps
+                      whose command field or envVariables reference any of the
+                      following tool names (case-insensitive):
+                      orca, wiz, prisma, twistlock, aqua, trivy, grype, snyk,
+                      checkmarx, veracode, fortify, sonar, sonarqube, semgrep,
+                      bandit, codeql, dependabot, osvscanner, owasp, hclappscan
+
+                  Process each STO pipeline individually with compact: true.
+                  For each pipeline collect:
+
+                    failure_policy_configured:
+                      true if ANY of the following is true:
+                      - A native STO step has fail_on_severity configured
+                      - A CustomIngest step has fail_on_severity configured
+                      IMPORTANT: if a Run step has failureStrategies: Ignore but its
+                      companion CustomIngest step has fail_on_severity WITHOUT Ignore,
+                      set this to true. The gate is on the ingest step, not the scan.
+                      false if no gate exists anywhere in the security scanning chain.
+                      null ONLY if pipeline config was not accessible.
+
+                    sto_stage_position:
+                      integer position of the FIRST STO-related step of any type
+                      within the pipeline stage (1=first step, 2=second, etc.)
+
+                    scanner_names:
+                      deduplicated lowercase list of ALL scanner names found
+
+                    has_sast:
+                      true if any scanner matches: semgrep, codeql, bandit, checkmarx,
+                      veracode, sonarqube, sonar, fortify, snyk code, harnesssast,
+                      hclappscan (case-insensitive). ELSE false.
+
+                    has_container_scan:
+                      true if any STO step or CustomIngest has target.type: container,
+                      OR a Run step scans a container image or ECR image.
+                      false otherwise.
+
+                    has_sarif_ingestion:
+                      true if any CustomIngest step has config: sarif. false otherwise.
+
+                    baseline_configured:
+                      true if STO baseline is configured. false otherwise. null if
+                      not detectable.
+
+                    jira_configured:
+                      true if Jira ticket creation is configured on STO findings.
+                      false otherwise.
+
+                    notification_configured:
+                      true if any Slack, email, or webhook notification is configured
+                      on STO findings. false otherwise. null if not detectable.
+
+                  After processing all STO pipelines, derive these aggregate counts:
+                    - pipelines_with_sto_count: total pipelines with has_sto=true
+                    - pipelines_with_gate_count: count where failure_policy_configured=true
+                      (treat null as false for this count)
+                    - pipelines_with_shiftleft_count: count where sto_stage_position <= 2
+                    - pipelines_with_baseline_count: count where baseline_configured=true
+                      (treat null as false)
+                    - pipelines_with_jira_count: count where jira_configured=true
+                    - pipelines_with_notification_count: count where
+                      notification_configured=true (treat null as false).
+                      If ALL pipelines had notification_configured=null, record
+                      pipelines_with_notification_count as null, not 0, and add a
+                      plain-English collection error noting notification status was
+                      not detectable.
+                    - all_scanner_names: deduplicated list of all scanner names
+                    - has_sast_scanner: true if any pipeline has has_sast=true
+                    - has_container_scan_count: count where has_container_scan=true
+                    - has_sarif_ingestion_count: count where has_sarif_ingestion=true
+                    - external_scanner_names: scanner names from Type 2 or 3 only
+
+                  ## SECTION 3 - EXECUTION SUMMARY
+                  Goal: get aggregate counts of pipeline executions for the last 60 days.
+
+                  Request execution data with compact: true, size: 20, filtered to:
+                    - Date range: last 60 days
+                    - Severity filter: CRITICAL and HIGH only
+
+                  Fetch page 1 only. Do not paginate. Collect:
+                    - total_count: total executions in the 60-day window (use aggregate
+                      from API metadata if available, otherwise count records returned)
+                    - window_start: timestamp of oldest execution in range
+                    - window_end: timestamp of most recent execution in range
+
+                  If execution data is entirely unavailable, record all fields as null
+                  and add a plain-English collection error.
+
+                  ## SECTION 4 - DEPLOYMENT SUMMARY
+                  Goal: get deployment timestamps to calculate patch lag.
+                  This section has ONE allowed retry. Follow exactly.
+
+                  Attempt A - compact mode:
+                    Request CD deployment data with compact: true, size: 20,
+                    filtered to last 60 days, successful deployments only.
+                    Look for timestamp fields: startTs, createdAt, lastModifiedAt,
+                    endTs, startTime, completedAt.
+
+                    If timestamps ARE present:
+                      - Record successful_count from API metadata aggregate if available,
+                        otherwise count the records returned.
+                      - Record most_recent: the largest/latest timestamp value found.
+                      - Record oldest_in_window: the smallest/earliest timestamp found.
+                      - Record timestamps exactly as returned (epoch ms or ISO string)
+                        — do NOT convert them. Agent 2 will handle conversion.
+                      - Do not proceed to Attempt B.
+
+                    If timestamps ARE NOT present or are all null:
+                      Proceed to Attempt B.
+
+                  Attempt B - non-compact retry:
+                    Request CD deployment data with compact: false, size: 10,
+                    filtered to last 60 days, successful deployments only.
+                    Extract ONLY timestamp fields and status. Discard all else.
+                    Record most_recent, oldest_in_window, and successful_count.
+
+                    If STILL unavailable after Attempt B:
+                      Set all deployment fields to null.
+                      Add plain-English collection error: "Deployment timestamps could
+                      not be retrieved after two attempts; patch lag calculation will
+                      not be available in the report."
+
+                  ## SECTION 5 - SUPPLY CHAIN AND INFRASTRUCTURE
+                  Goal: check project-level module configuration.
+
+                  Use compact: true, size: 20. Check project settings only.
+                    - scs_stage_present: derive from Section 1 — true if any pipeline
+                      has has_scs=true, false otherwise. No additional API call needed.
+                    - sbom_generation: true if SBOM generation is configured in any
+                      pipeline (look for SSCA steps, cdxgen config, sbom_tool
+                      references), false otherwise.
+                    - iacm_active: true if IaCM module is active (check for IACM stage
+                      types in Section 1, or IaCM workspace/module config).
+                    - drift_detection_enabled: true if drift detection is enabled in
+                      IaCM settings OR SBOM drift is configured in any SSCA step,
+                      false if explicitly disabled, null if IaCM and SSCA both absent.
+
+                  ## SECTION 6 - SECRETS AND GOVERNANCE
+                  Goal: check project-level security configuration.
+
+                  Use compact: true, size: 20. Do not fetch secret values.
+                    - using_secrets_manager: true if Harness Secrets Manager expressions
+                      (secrets.getValue or <+secrets.getValue(...)>) are used in any
+                      pipeline, OR if account-level secrets exist (secret count > 0).
+                    - plaintext_values_detected: true if any plaintext credential-like
+                      values appear where secret references are expected. false otherwise.
+                    - token_rotation_configured: true if API key expiry or token rotation
+                      policies are configured. false if explicitly disabled. null if not
+                      detectable.
+                    - opa_policies_configured: true ONLY if OPA governance policies exist
+                      AND are enabled (enabled=true). false if policies exist but are all
+                      disabled, or if no policies exist. null if the OPA endpoint returns
+                      no route or is inaccessible (add a plain-English collection error).
+                    - pipeline_templates_used: true if any pipeline or stage templates
+                      are referenced in any pipeline in this project.
+                    - pipelines_using_templates_count: integer count, null if not
+                      detectable.
+
+                  ## SECTION 7 - RUNTIME PROTECTION AND RESPONSE
+                  Goal: check runtime security and incident response configuration.
+
+                  Use compact: true, size: 20. Check configuration flags only.
+                    - waap_enabled: true if Harness WAAP is enabled for any service.
+                      false if explicitly not configured. null if not detectable.
+                    - traceable_configured: true if Traceable API security is configured.
+                      false if not. null if not detectable.
+                    - sto_notifications_configured:
+                      Check project-level notification rules first.
+                      If Section 2 found pipelines_with_notification_count > 0: true.
+                      If Section 2 found pipelines_with_notification_count = 0: false.
+                      If Section 2 found pipelines_with_notification_count = null: null.
+                      If no STO pipelines exist: false.
+                    - sto_jira_integration_configured:
+                      Check project-level Jira integration first.
+                      If Section 2 found pipelines_with_jira_count > 0: true.
+                      If Section 2 found pipelines_with_jira_count = 0: false.
+                    - sto_baselines_configured:
+                      Check project-level baselines first.
+                      If Section 2 found pipelines_with_baseline_count > 0: true.
+                      If Section 2 found pipelines_with_baseline_count = 0: false.
+
+                  ## PRE-OUTPUT SELF-CHECK
+                  Before writing the final JSON, verify:
+                    1. All 10 top-level keys are present (meta, pipelines, sto,
+                       executions, deployments, supply_chain, infrastructure,
+                       secrets, governance, runtime_and_response).
+                    2. pipelines.total_count is not null. If it is null after all
+                       attempts, set it to the count of pipelines in
+                       pipelines.inventory and add a plain-English collection error:
+                       "Total pipeline count was not available from the API; count
+                       reflects only the pipelines directly enumerated."
+                    3. Every field in the schema is present (even if null).
+                    4. No section prefix names (section1_, section2_, etc.) exist.
+                    5. meta.collection_errors contains only plain English sentences.
+
+                  ## OUTPUT FORMAT
+                  Output ONLY this exact JSON. No prose. No markdown fences. No
+                  explanation before or after. Start the output with { and end with }.
+
+                  {
+                    "meta": {
+                      "account_id": "",
+                      "org_id": "",
+                      "project_id": "",
+                      "collection_timestamp": "",
+                      "data_window_days": 60,
+                      "collection_errors": []
+                    },
+                    "pipelines": {
+                      "total_count": 0,
+                      "with_triggers": 0,
+                      "inventory": [
+                        {
+                          "id": "",
+                          "name": "",
+                          "stages": [],
+                          "has_sto": false,
+                          "has_cd": false,
+                          "has_scs": false,
+                          "has_iacm": false,
+                          "has_trigger": false
+                        }
+                      ]
+                    },
+                    "sto": {
+                      "pipelines_with_sto_count": 0,
+                      "pipelines_with_gate_count": 0,
+                      "pipelines_with_shiftleft_count": 0,
+                      "pipelines_with_baseline_count": 0,
+                      "pipelines_with_jira_integration_count": 0,
+                      "pipelines_with_notification_count": 0,
+                      "scanner_types": [],
+                      "has_sast_scanner": false,
+                      "has_container_scan_count": 0,
+                      "has_sarif_ingestion_count": 0,
+                      "external_scanner_names": [],
+                      "critical_findings_last_60d": null,
+                      "high_findings_last_60d": null,
+                      "successful_despite_critical_count": null
+                    },
+                    "executions": {
+                      "total_count": null,
+                      "window_start": null,
+                      "window_end": null
+                    },
+                    "deployments": {
+                      "successful_count": null,
+                      "most_recent": null,
+                      "oldest_in_window": null
+                    },
+                    "supply_chain": {
+                      "scs_stage_present": false,
+                      "sbom_generation": false
+                    },
+                    "infrastructure": {
+                      "iacm_active": false,
+                      "drift_detection_enabled": null
+                    },
+                    "secrets": {
+                      "using_secrets_manager": null,
+                      "plaintext_values_detected": null,
+                      "token_rotation_configured": null
+                    },
+                    "governance": {
+                      "opa_policies_configured": null,
+                      "pipeline_templates_used": null,
+                      "pipelines_using_templates_count": null,
+                      "total_pipelines_count": null
+                    },
+                    "runtime_and_response": {
+                      "waap_enabled": null,
+                      "traceable_configured": null,
+                      "sto_notifications_configured": false,
+                      "sto_jira_integration_configured": false,
+                      "sto_baselines_configured": false
+                    }
+                  }
+
+                  After outputting the JSON, write it to $DRONE_OUTPUT:
+                  echo "REPORT_DATA=<complete json here>" >> "$DRONE_OUTPUT"
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>

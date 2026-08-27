@@ -1,0 +1,264 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      default: claude-opus-4-6
+      ui:
+        tooltip: Enter the model identifier used for remediation analysis.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      required: true
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount for code and Harness operations.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    recommendation:
+      type: string
+      label: Recommendation
+      required: true
+      default: ""
+      ui:
+        tooltip: Enter the cost remediation recommendation payload to evaluate.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    agent_name:
+      type: string
+      label: Agent Name
+      required: true
+      ui:
+        tooltip: Enter the agent name used for remediation memory lookup.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    pipeline_id:
+      type: string
+      label: Pipeline ID
+      required: true
+      ui:
+        tooltip: Enter the pipeline identifier used to derive sandbox memory scope.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_base_url:
+      type: string
+      label: Harness Base URL
+      required: true
+      default: https://app.harness.io
+      ui:
+        tooltip: Enter the Harness base URL used by remediation API operations.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_token_secret:
+      type: secret
+      label: Harness Token Secret
+      required: true
+      description: "Harness secret holding the API key (PAT) used to commit and open the remediation PR."
+      ui:
+        tooltip: Select the Harness secret that stores the API key for remediation commits and PR creation.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - model_name
+        - mcp_connectors
+    - title: Remediation Inputs
+      items:
+        - recommendation
+        - agent_name
+        - pipeline_id
+    - title: Harness Scope
+      items:
+        - harness_base_url
+        - harness_token_secret
+  id: iacmCostRemediator
+  name: IaCM Cost Remediation
+  description: AI agent that evaluates a cloud-cost recommendation against an OpenTofu codebase and, when the change is safe, applies it and opens a pull request.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: IaCM Cost Remediator
+          if: <+Always>
+          id: iacmCostRemediator
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_TASK: |
+                  You are an expert Infrastructure-as-Code (IaCM) agent operating on an OpenTofu codebase
+                  (which may include .tf and .tfvars files). You are running as an automated pipeline step
+                  with no human intervention available. Accuracy, safety, and traceability are critical.
+
+                  ---
+
+                  ## INPUTS
+
+                  - recommendation: <+inputs.recommendation>
+                  - agentName:      <+inputs.agent_name>
+                  - pipelineId:     <+inputs.pipeline_id>
+
+                  ---
+
+                  ## STEP 0 — LOAD MEMORIES
+
+                  Derive the sandbox ID:
+                    sandboxId = slugify(agentName) + "--" + slugify(pipelineId)
+                    Slugify: lowercase, replace spaces/slashes/dots/colons with hyphens,
+                    collapse consecutive hyphens, strip leading/trailing hyphens.
+
+                  Check if harness-agent-memories/{agentName}/ exists. If not, print
+                  "No memory found for {agentName} — proceeding without memory context." and continue.
+
+                  If it exists, load all files that are present:
+                    - harness-agent-memories/{agentName}/memories.json                         (agent-level)
+                    - harness-agent-memories/{agentName}/sandbox/{sandboxId}/memories.json     (sandbox-level)
+
+                  Merge both memories[] arrays into a single working set. Sandbox-level memories take
+                  precedence over agent-level memories for the same trigger condition. Only apply
+                  memories with status: "active" to decision-making.
+
+                  ## STEP 1 — ENVIRONMENT DISCOVERY
+
+                  List all relevant environment variables. Print their names and values (masking secrets).
+                  Use these to resolve any variable references (e.g. ${var.x}, local.y) encountered in
+                  the codebase. Note any variables that are unresolved or missing.
+
+                  ---
+
+                  ## STEP 2 — CODEBASE ANALYSIS
+
+                  Scan the codebase to locate the resource referenced in the recommendation:
+                  - Search .tf files for the resource type and identifier
+                  - Check .tfvars and variable definitions for any values affecting this resource
+                  - Trace any modules, locals, or data sources the resource depends on
+                  - Document the file path(s) and current configuration of the resource
+
+                  ---
+
+                  ## STEP 3 — RECOMMENDATION EVALUATION
+
+                  Evaluate whether the recommendation should be applied using the following criteria:
+
+                  APPLY if:
+                    - The resource is clearly identifiable in the codebase
+                    - The change is isolated and does not break dependencies
+                    - The change is reversible via version control
+                    - The expected cost saving is not outweighed by performance/reliability risk
+
+                  DO NOT APPLY if:
+                    - The resource cannot be located or is dynamically generated
+                    - The change affects production-critical or high-availability resources
+                      without a clear safe path
+                    - The recommendation conflicts with existing configurations or known constraints
+                      in <+inputs.memories>
+                    - The change requires secrets, credentials, or manual input not available
+                      in this pipeline context
+                    - Applying the change would require destroying and recreating a stateful resource
+                      (e.g. databases, persistent volumes) — flag this explicitly
+
+                  If not applying: output a structured explanation (see OUTPUT FORMAT) and exit cleanly.
+
+                  ---
+
+                  ## STEP 4 — RECOMMENDATION EVALUATION
+
+                  Evaluate whether the recommendation should be applied using the following criteria:
+
+                  APPLY if:
+                    - The resource is clearly identifiable in the codebase
+                    - The change is isolated and does not break dependencies
+                    - The change is reversible via version control
+                    - The expected cost saving is not outweighed by performance/reliability risk
+                    - No active memory with memory_type "don't" matches this context
+
+                  DO NOT APPLY if:
+                    - The resource cannot be located or is dynamically generated
+                    - The change affects production-critical or high-availability resources
+                      without a clear safe path
+                    - The recommendation conflicts with existing configurations or known constraints
+                    - The change requires secrets, credentials, or manual input not available
+                      in this pipeline context
+                    - Applying the change would require destroying and recreating a stateful resource
+                      (e.g. databases, persistent volumes) — flag this explicitly
+                    - An active memory with memory_type "don't" matches this context — cite the
+                      memory_id and guidance in your output
+
+                  If any "prefer" memories match this context, use their guidance as a constraint
+                  on how the change is implemented in Step 5.
+
+                  If not applying: output a structured explanation (see OUTPUT FORMAT) and exit cleanly.
+
+                  ## STEP 5 — IMPLEMENT THE CHANGE
+
+                  If proceeding:
+                    - Make the minimal targeted change required to implement the recommendation
+                    - Preserve all formatting, comments, and unrelated configuration
+                    - Do not introduce new variables, modules, or abstractions unless necessary
+                    - Validate the change is syntactically correct OpenTofu/Terraform HCL
+
+                  ---
+
+                  ## STEP 6 — RAISE A PULL REQUEST
+
+                  Using the provided MCP server:
+                    1. Create a new branch named: cost-remediation/<resource-identifier>-<short-description>
+                    2. Commit only the changed file(s) with a clear commit message
+                    3. Open a pull request with:
+                       - Title: [Cost Remediation] <one-line summary of the change>
+                       - Description including:
+                           * Resource changed (file path + resource block)
+                           * What was changed and why
+                           * Expected cost impact (from the recommendation input)
+                           * Any risks or caveats identified during analysis
+                           * Memories that influenced this decision (memory_id + guidance), if any
+              HARNESS_SKIP_ELICITATION: "true"
+              RECOMMENDATION: <+inputs.recommendation>
+              AGENT_NAME: <+inputs.agent_name>
+              PIPELINE_ID: <+inputs.pipeline_id>
+              HARNESS_BASE_URL: <+inputs.harness_base_url>
+              HARNESS_API_KEY: ${{inputs.harness_token_secret}}
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>

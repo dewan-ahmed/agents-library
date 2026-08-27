@@ -1,0 +1,72 @@
+template:
+  id: aiCodeReviewAgent
+  name: Code Review
+  description: "Coming soon — not yet ready for use. AI agent that reviews the pull request that triggered the pipeline, generating review instructions from the diff and posting inline comments, an AI overview, success-criteria results, and suggested reviewers."
+  version: 1
+  author: harness
+  agent:
+    name: AI_PR_REVIEW_AGENT
+    group:
+      name: AI PR Review Agent
+      id: aiPrReviewAgent
+      steps:
+        - name: generate agent instructions
+          id: generateAgentInstructions
+          run:
+            container:
+              image: pkg.harness.io/9uuuflwaq-6zowvbg7qtlq/harness-plugin-images/harness-pr-review-plugin:latest
+            output-alias:
+              key: AgentInstructions
+              scope: StepGroup
+        - name: print plugin outputs
+          id: printPluginOutputs
+          run:
+            shell: Sh
+            script: |-
+              set -eu
+              echo "──── tree of /harness/output ────"
+              find /harness/output -type f | sort
+              echo
+              for f in $(find /harness/output -type f | sort); do
+                echo "==================================================================="
+                echo "FILE: $f  ($(wc -c < "$f") bytes)"
+                echo "==================================================================="
+                case "$f" in
+                  *.json) jq '.' "$f" 2>/dev/null || cat "$f" ;;
+                  *)      cat "$f" ;;
+                esac
+                echo
+              done
+        - name: pr review agent
+          id: prReviewAgent
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.77
+              connector: account.harnessImage
+            env:
+              PLUGIN_TASK_FILE: /harness/output/task.txt
+              PLUGIN_SKILL_FILE: /harness/output/skill/SKILL.md
+              PLUGIN_AGENTS_FILE: /harness/output/skill/subagents.json
+              PLUGIN_MAX_TURNS: ${{inputs.max_turns}}
+              PLUGIN_HARNESS_CONNECTOR: <+exportedVariables.getValue("stepGroup.AgentInstructions.AICR_LLM_CONNECTOR_REF")>
+              PLUGIN_MCP_SERVERS: '<+<+exportedVariables.getValue("stepGroup.AgentInstructions.AICR_MCP_CONNECTOR_REFS")> == "" ? "{}" : connectorInputs.resolveList(<+<+exportedVariables.getValue("stepGroup.AgentInstructions.AICR_MCP_CONNECTOR_REFS")>.split(",")>)>'
+              PLUGIN_MCP_FORMAT: harness
+              HARNESS_AGENT_TRACE_EXPORTERS: udp
+              HARNESS_AGENT_TRACE_CAPTURE_BODIES: "true"
+        - name: post review results
+          id: postReviewResults
+          run:
+            container:
+              image: pkg.harness.io/9uuuflwaq-6zowvbg7qtlq/harness-plugin-images/python:3.12-alpine
+            script: python3 /harness/output/harness_pr_review/aicr_post.py all
+  inputs:
+    max_turns:
+      type: string
+      label: Max Turns
+      default: "150"
+      ui:
+        tooltip: Enter the maximum number of agent iterations before the run is terminated.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression

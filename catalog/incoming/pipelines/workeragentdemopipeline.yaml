@@ -1,0 +1,81 @@
+pipeline:
+  name: worker-agent-demo-pipeline
+  identifier: workeragentdemopipeline
+  projectIdentifier: dewanahmed
+  orgIdentifier: SANDBOX
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: podinfo
+        build: <+input>
+  variables:
+    - name: repoName
+      type: String
+      value: podinfo
+  stages:
+    - stage:
+        name: build
+        identifier: build
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+            override: true
+          buildIntelligence:
+            enabled: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Run Tests
+                  identifier: Run_Tests
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set +e
+                      go test -v ./... -coverprofile=cover.out > /harness/test-output.log 2>&1
+                      TEST_EXIT=$?
+                      cat /harness/test-output.log
+                      printf 'TEST_EXIT=%s\n' "$TEST_EXIT" >> "$HARNESS_OUTPUT"
+                    outputVariables:
+                      - name: TEST_EXIT
+                        type: String
+                        value: TEST_EXIT
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+              - step:
+                  type: Agent
+                  name: Test Result Summarize
+                  identifier: Test_Result_Summarize
+                  spec:
+                    agentName: ca_testresultssummarizer
+                    agentSettings:
+                      llmConnector: account.harnessAnthropic
+                      branch: <+codebase.branch>
+                      commit_sha: <+codebase.commitSha>
+                      pipeline_url: <+pipeline.executionUrl>
+                      repo_name: podinfo
+                      test_exit_code: <+steps.Run_Tests.output.outputVariables.TEST_EXIT>
+                      test_output_path: /harness/test-output.log
+                    inputs:
+                      test_output_path: /harness/test-output.log
+                      test_exit_code: <+steps.Run_Tests.output.outputVariables.TEST_EXIT>
+                      pipeline_url: <+pipeline.executionUrl>
+                      branch: <+codebase.branch>
+                      commit_sha: <+codebase.commitSha>
+                      pr_number: <+codebase.prNumber>
+                      repo_name: <+pipeline.variables.repoName>
+                    envVariables:
+                      HARNESS_TOKEN: <+secrets.getValue("DEWAN_PAT")>

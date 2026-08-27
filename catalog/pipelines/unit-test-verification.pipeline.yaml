@@ -1,0 +1,79 @@
+pipeline:
+  name: Unit Test Verification
+  identifier: unitTestVerification
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  variables:
+    - name: llmConnector
+      type: String
+      description: Account, org, or project LLM connector reference.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier exposed by your LLM connector.
+      required: true
+      value: <+input>
+    - name: harnessMcpConnector
+      type: String
+      description: Harness MCP connector allowed to interrupt the current execution.
+      required: true
+      value: <+input>
+    - name: coverageThreshold
+      type: String
+      description: Required percentage of testable services and components with unit tests.
+      required: true
+      value: <+input>.default(90)
+  stages:
+    - stage:
+        name: Unit Test Verification
+        identifier: unit_test_verification
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+            override: false
+          buildIntelligence:
+            enabled: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Verify Unit Test Coverage
+                  identifier: verify_unit_test_coverage
+                  spec:
+                    agentName: ca_test_and_security_verification
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+                      mcpConnectors:
+                        - <+pipeline.variables.harnessMcpConnector>
+                      coverageThreshold: <+pipeline.variables.coverageThreshold>
+                      pipelineExecutionId: <+pipeline.executionId>
+              - step:
+                  type: Run
+                  name: Continue After Verification
+                  identifier: continue_after_verification
+                  spec:
+                    shell: Sh
+                    command: |
+                      echo "Unit-test verification passed; continuing the pipeline."
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure

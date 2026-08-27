@@ -1,0 +1,640 @@
+template:
+  inputs:
+    execution_id:
+      type: string
+      label: AI Workflow Execution ID
+      required: true
+      default: <+pipeline.executionId>
+      ui:
+        tooltip: Enter the AI Workflow execution ID for this remediation run. Auto-populated by Harness at trigger time; override only for replay or debugging.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    account_id:
+      type: string
+      label: Account ID
+      required: true
+      default: <+account.identifier>
+      ui:
+        tooltip: Enter the Harness account ID that owns this remediation run. Auto-populated at trigger time; override only for replay or debugging.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    org_id:
+      type: string
+      label: Org ID
+      required: true
+      default: <+org.identifier>
+      ui:
+        tooltip: Enter the Harness organization ID that owns this remediation run. Auto-populated at trigger time; override only for replay or debugging.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    project_id:
+      type: string
+      label: Project ID
+      required: true
+      default: <+project.identifier>
+      ui:
+        tooltip: Enter the Harness project ID that owns this remediation run. Auto-populated at trigger time; override only for replay or debugging.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    scan_id:
+      type: string
+      label: Scan ID (scan-completion only)
+      default: ""
+      ui:
+        tooltip: Enter the scan ID whose findings should be remediated. Auto-populated when triggered by a scan-completion event; leave empty for future scheduled or on-demand runs. Must be set together with Target ID.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    target_id:
+      type: string
+      label: Target ID
+      default: ""
+      ui:
+        tooltip: Enter the target ID being remediated. Auto-populated on a scan-completion trigger; must be set together with Scan ID.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    target_name:
+      type: string
+      label: Target / Repository Name
+      default: ""
+      ui:
+        tooltip: Enter the target display name, in owner/repo form when available. Auto-populated from the scan-completion event.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    repo_url:
+      type: string
+      label: Repository Clone URL
+      default: ""
+      ui:
+        tooltip: Enter the Git remote URL from the originating scan, used when the stage clone of the codebase does not resolve the repository. Auto-populated from the scan target URL.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    target_variant_name:
+      type: string
+      label: Target Variant Name
+      default: ""
+      ui:
+        tooltip: Enter the target variant name from the originating scan. Used as the pull request target branch when present; auto-populated from the scan-completion event.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    source_branch:
+      type: string
+      label: Source Branch
+      default: ""
+      ui:
+        tooltip: Enter the branch the originating scan ran on. Used as the fix pull request base branch and to clone the repository; auto-populated from the scan-completion event Git metadata.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    scm_provider:
+      type: string
+      label: SCM Provider
+      default: ""
+      ui:
+        tooltip: Enter the source control provider of the repository, such as github, gitlab, bitbucket, or harness_code. Selects the pull request creation path; auto-populated from the scan-completion event.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    scan_types:
+      type: string
+      label: Issue Types to Remediate
+      default: ""
+      ui:
+        tooltip: "Specify a comma-separated list of issue types to remediate. Leave empty to remediate all supported types. Stamped from the AI Workflow configuration."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    severity_types:
+      type: string
+      label: Severities to Remediate
+      default: "CRITICAL,HIGH"
+      ui:
+        tooltip: "Specify a comma-separated list of severities to remediate, from CRITICAL, HIGH, MEDIUM, LOW, and INFO. Leave empty to remediate every severity."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    only_true_positive_issue_types:
+      type: string
+      label: Only True-Positive Issue Types
+      default: ""
+      ui:
+        tooltip: "Specify a comma-separated list of issue types that require a TRUE_POSITIVE triage verdict before a fix is attempted. Each type is filtered independently. Leave empty to apply no triage filter. When set, triage must cover those types and this run stays queued until triage reaches a terminal state."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    exclude_unreachable:
+      type: boolean
+      label: Exclude Unreachable Issues
+      default: false
+      ui:
+        tooltip: "Enable to skip issues that are not reachable, matching the Exclude issues that are not reachable filter. Applies only where reachability data is present on the occurrences."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    exclude_repo_patterns:
+      type: string
+      label: Exclude Repositories
+      default: ""
+      ui:
+        tooltip: "Specify comma-separated glob patterns that exclude repositories from remediation, for example \"*-test,dev-*\"."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the large language model connector used to generate fixes. Sub-agents require an Anthropic (Claude) backend today.
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    scm_connector:
+      type: connector
+      label: SCM Connector
+      required: true
+      oneof:
+        - Github
+        - Gitlab
+        - Bitbucket
+        - AzureRepo
+        - Git
+      ui:
+        tooltip: "Select the source control connector for the repository being remediated. It both clones the codebase into the stage and pushes the fix branch to open the pull request, so its credential must allow pushes and pull request creation. For GitHub, use HTTP authentication with a personal access token that holds the classic repo scope; for Harness Code, use a Git connector with a personal access token. Stamped from the AI Workflow configuration and required because this agent runs outside the project where the repository lives."
+        placeholder: Select SCM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      default: []
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Select the Model Context Protocol connectors the agent mounts for Harness pipeline execution, failure diagnosis, and finding reads.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_base_url:
+      type: string
+      label: Harness Base URL
+      default: ""
+      ui:
+        tooltip: "Enter the Harness API gateway base URL used by the first-party harness Model Context Protocol server and its REST fallback, for example https://app.harness.io. Pairs with the account secret harness_api_key; leave empty to use the agent runtime default."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    validation_mode:
+      type: string
+      label: Validation Mode
+      default: agent_validated
+      options:
+        - agent_validated
+        - deferred
+      ui:
+        component: select
+        tooltip: "Select how a fix branch is verified before the pull request opens. Choose agent_validated to run the configured validation pipelines, scanning first when a scan pipeline is set and building after that scan succeeds, or deferred to skip validation and rely on your own pull request checks. A run behaves as deferred when neither pipeline is configured."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    scan_pipeline_id:
+      type: string
+      label: Scan Pipeline
+      default: ""
+      ui:
+        tooltip: "Enter the identifier of a scan-only pipeline that re-scans the fix branch to confirm findings are remediated, which is checked before the build pipeline. It must use the same scanner as the originating scan, clone the target repository, and expose the codebase branch as a runtime input. Leave empty to skip the scan check and run build-only or deferred validation."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    scan_pipeline_org:
+      type: string
+      label: Scan Pipeline Org
+      default: ""
+      ui:
+        tooltip: Enter the Harness organization that holds the scan pipeline, which may differ from the organization running the remediation. Leave empty to use this remediation run's organization.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    scan_pipeline_project:
+      type: string
+      label: Scan Pipeline Project
+      default: ""
+      ui:
+        tooltip: Enter the Harness project that holds the scan pipeline. Leave empty to use this remediation run's project.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    scan_input_set:
+      type: string
+      label: Scan Pipeline Input Set
+      default: ""
+      ui:
+        tooltip: Enter the input set identifier that supplies the scan pipeline's required runtime inputs. The fix branch is passed automatically as the codebase branch.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    build_pipeline_id:
+      type: string
+      label: Build Pipeline
+      default: ""
+      ui:
+        tooltip: "Enter the identifier of a build-only pipeline that confirms the fix branch still builds. It runs after the scan pipeline reaches a successful terminal state, or immediately when no scan pipeline is set, and runs even when findings remain. It must clone the target repository and expose the codebase branch as a runtime input; leave empty to skip the build check."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    build_pipeline_org:
+      type: string
+      label: Build Pipeline Org
+      default: ""
+      ui:
+        tooltip: Enter the Harness organization that holds the build pipeline. Leave empty to use this remediation run's organization.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    build_pipeline_project:
+      type: string
+      label: Build Pipeline Project
+      default: ""
+      ui:
+        tooltip: Enter the Harness project that holds the build pipeline. Leave empty to use this remediation run's project.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    build_input_set:
+      type: string
+      label: Build Pipeline Input Set
+      default: ""
+      ui:
+        tooltip: Enter the input set identifier that supplies the build pipeline's required runtime inputs. The fix branch is passed automatically as the codebase branch.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    max_fix_attempts:
+      type: number
+      label: Max Fix Attempts
+      default: 4
+      ui:
+        tooltip: "Limit how many fix and validate iterations the joint scan and build loop performs, where one attempt is a single validation round of the scan pipeline followed by the build pipeline when both are configured. For example, 2 fixes every issue and validates, re-fixes once if the joint gate is not green, and then opens the pull request with whatever remains. The same budget covers scan and build re-fixes."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    remediation_time_budget_seconds:
+      type: number
+      label: Time Budget (seconds)
+      default: 0
+      ui:
+        tooltip: "Set a soft wall-clock budget in seconds that caps only the start of new validation attempts, where 0 means unlimited. It never interrupts a pipeline wait already in progress and never gates fixing. When the elapsed time exceeds the budget before a new validation attempt, the agent pushes the fixes it completed, marks the rest unverified, and opens the pull request."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    max_occurrences:
+      type: number
+      label: Max Occurrences Per Run
+      default: 500
+      ui:
+        tooltip: "Limit how many finding occurrences a single run remediates so the working set stays bounded. Enter a value of 1 or greater."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    additional_instructions:
+      type: string
+      label: Additional Instructions
+      default: ""
+      ui:
+        component: textarea
+        tooltip: Enter optional free-form guidance appended to the orchestrator prompt. Use it sparingly and prefer adjusting the filters above.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    jira_enabled:
+      type: boolean
+      label: Jira Enabled
+      default: false
+      ui:
+        tooltip: "Enable to create a summary Jira ticket once results are persisted. Auto-populated from the AI Workflow configuration on trigger, so leave it unchanged for automatic runs."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    triggering_pipeline_id:
+      type: string
+      label: Triggering Pipeline ID
+      default: ""
+      ui:
+        tooltip: Enter the identifier of the pipeline that produced the originating scan. Auto-populated on a scan-completion trigger and used for the pull request's originating scan link.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    triggering_pipeline_execution_id:
+      type: string
+      label: Triggering Pipeline Execution ID
+      default: ""
+      ui:
+        tooltip: Enter the execution ID of the originating scan pipeline. Auto-populated on a scan-completion trigger and used for the pull request's originating scan link.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    triggering_pipeline_build_number:
+      type: string
+      label: Triggering Pipeline Build Number
+      default: ""
+      ui:
+        tooltip: "Enter the build or sequence number of the originating scan pipeline. Auto-populated on a scan-completion trigger and used in the fix branch name."
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - scan_types
+    - severity_types
+    - only_true_positive_issue_types
+    - exclude_unreachable
+    - llm_connector
+    - scm_connector
+    - validation_mode
+    - scan_pipeline_id
+    - scan_pipeline_org
+    - scan_pipeline_project
+    - scan_input_set
+    - build_pipeline_id
+    - build_pipeline_org
+    - build_pipeline_project
+    - build_input_set
+    - variant: more
+      items:
+        - max_fix_attempts
+        - remediation_time_budget_seconds
+        - exclude_repo_patterns
+        - mcp_connectors
+        - harness_base_url
+        - max_occurrences
+        - additional_instructions
+        - triggering_pipeline_id
+        - triggering_pipeline_execution_id
+        - triggering_pipeline_build_number
+        - execution_id
+        - account_id
+        - org_id
+        - project_id
+        - scan_id
+        - target_id
+        - target_name
+        - target_variant_name
+        - source_branch
+        - scm_provider
+        - repo_url
+        - jira_enabled
+
+  id: remediationAgent
+  name: Auto-Remediation
+  description: AI agent that fixes findings from a scan, validates the fix branch (build + re-scan), and opens one pull request with per-issue commits. Phase 1 keeps partial fixes and always opens the PR with a status summary.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Scope
+          id: scope
+          if: <+Always>
+          run:
+            container:
+              image: harness/remediation-pre-plugin:latest
+              connector: account.harnessImage
+              pull_policy: always
+            env:
+              EXECUTION_ID: ${{inputs.execution_id}}
+              ACCOUNT_ID: ${{inputs.account_id}}
+              ORG_ID: ${{inputs.org_id}}
+              PROJECT_ID: ${{inputs.project_id}}
+              SCAN_ID: ${{inputs.scan_id}}
+              TARGET_ID: ${{inputs.target_id}}
+              TARGET_NAME: ${{inputs.target_name}}
+              REPO_URL: ${{inputs.repo_url}}
+              TARGET_VARIANT_NAME: ${{inputs.target_variant_name}}
+              SOURCE_BRANCH: ${{inputs.source_branch}}
+              SCM_PROVIDER: ${{inputs.scm_provider}}
+              ISSUE_TYPES: ${{inputs.scan_types}}
+              SEVERITY_TYPES: ${{inputs.severity_types}}
+              ONLY_TRUE_POSITIVE_ISSUE_TYPES: ${{inputs.only_true_positive_issue_types}}
+              EXCLUDE_UNREACHABLE: ${{inputs.exclude_unreachable}}
+              EXCLUDE_REPO_PATTERNS: ${{inputs.exclude_repo_patterns}}
+              MAX_OCCURRENCES: ${{inputs.max_occurrences}}
+              VALIDATION_MODE: ${{inputs.validation_mode}}
+              SCAN_PIPELINE_ID: ${{inputs.scan_pipeline_id}}
+              SCAN_PIPELINE_ORG: ${{inputs.scan_pipeline_org}}
+              SCAN_PIPELINE_PROJECT: ${{inputs.scan_pipeline_project}}
+              SCAN_INPUT_SET: ${{inputs.scan_input_set}}
+              BUILD_PIPELINE_ID: ${{inputs.build_pipeline_id}}
+              BUILD_PIPELINE_ORG: ${{inputs.build_pipeline_org}}
+              BUILD_PIPELINE_PROJECT: ${{inputs.build_pipeline_project}}
+              BUILD_INPUT_SET: ${{inputs.build_input_set}}
+              ORIGIN_EXECUTION_ID: <+pipeline.executionId>
+              TRIGGERING_PIPELINE_ID: ${{inputs.triggering_pipeline_id}}
+              TRIGGERING_PIPELINE_EXECUTION_ID: ${{inputs.triggering_pipeline_execution_id}}
+              TRIGGERING_PIPELINE_BUILD_NUMBER: ${{inputs.triggering_pipeline_build_number}}
+              SCOPE_FILE: /harness/sast_rem_scope.json
+              AGENT_BUNDLE_DIR: /harness/output
+              ADDITIONAL_INSTRUCTIONS: ${{inputs.additional_instructions}}
+              MAX_FIX_ATTEMPTS: ${{inputs.max_fix_attempts}}
+              PROMPT_VERSION: rem-v17
+              HARNESS_STO_SERVICE_TOKEN: <+sto.serviceToken>
+              HARNESS_STO_SERVICE_ENDPOINT: <+sto.serviceEndpoint>
+
+        - name: print agent bundle
+          id: printAgentBundle
+          if: <+steps.scope.output.outputVariables.outcome> != "ZERO_IN_SCOPE"
+          run:
+            container:
+              image: harness/remediation-pre-plugin:latest
+              connector: account.harnessImage
+            shell: Sh
+            script: |-
+              set -eu
+              BUNDLE="${AGENT_BUNDLE_DIR:-/harness/output}"
+              echo "──── agent bundle inventory: $BUNDLE ────"
+              for req in task.txt skill/SKILL.md skill/subagents.json; do
+                if [ ! -f "$BUNDLE/$req" ]; then
+                  echo "ERROR: missing required $BUNDLE/$req"
+                  exit 1
+                fi
+              done
+              find "$BUNDLE" -type f 2>/dev/null | sort | while IFS= read -r f; do
+                sz=$(wc -c < "$f" | tr -d ' ')
+                printf '%8s  %s\n' "$sz" "$f"
+              done
+              echo "──── task.txt (FIX_BRANCH redacted) ────"
+              sed -E 's/(FIX_BRANCH=).*/\1<redacted>/' "$BUNDLE/task.txt"
+              echo "──── skill/subagents.json (full) ────"
+              cat "$BUNDLE/skill/subagents.json"
+              echo "──── skill/SKILL.md outline ────"
+              echo "lines=$(wc -l < "$BUNDLE/skill/SKILL.md" | tr -d ' ')"
+              grep -E '^#{1,3} ' "$BUNDLE/skill/SKILL.md" || true
+              echo "──── skill/SKILL.md head (120 lines) ────"
+              head -n 120 "$BUNDLE/skill/SKILL.md"
+              echo "──── skill/SKILL.md Validation diagnosis § (if present) ────"
+              awk '/^## Validation diagnosis/{p=1} p && /^## / && !/^## Validation diagnosis/{exit} p{print}' \
+                "$BUNDLE/skill/SKILL.md" || true
+            env:
+              AGENT_BUNDLE_DIR: /harness/output
+
+        - name: Remediate
+          id: remediate
+          if: <+steps.scope.output.outputVariables.outcome> != "ZERO_IN_SCOPE"
+          on-failure:
+            errors: all
+            action: ignore
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.77
+              connector: account.harnessImage
+              memory: "8Gi"
+              cpu: "4"
+            env:
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_TASK_FILE: /harness/output/task.txt
+              PLUGIN_SKILL_FILE: /harness/output/skill/SKILL.md
+              PLUGIN_AGENTS_FILE: /harness/output/skill/subagents.json
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+              PLUGIN_ALLOWED_TOOLS: "Task,Read,Write,Edit,Glob,Grep,Bash,mcp__harness__*,mcp__harness_local__*"
+              PLUGIN_MAX_TURNS: "1000"
+              PLUGIN_LOG_FILE: /harness/remediation_agent_log.jsonl
+              HARNESS_AGENT_MODE: agent
+              SCOPE_FILE: /harness/sast_rem_scope.json
+              REPO_DIR: /harness
+              RESULT_FILE: /harness/sast_rem_result.json
+              ACCOUNT_ID: ${{inputs.account_id}}
+              ORG_ID: ${{inputs.org_id}}
+              PROJECT_ID: ${{inputs.project_id}}
+              SCAN_ID: ${{inputs.scan_id}}
+              TARGET_ID: ${{inputs.target_id}}
+              TARGET_NAME: ${{inputs.target_name}}
+              REPO_URL: ${{inputs.repo_url}}
+              TARGET_VARIANT_NAME: ${{inputs.target_variant_name}}
+              ORIGINAL_OCCURRENCE_COUNT: <+steps.scope.output.outputVariables.originalOccurrenceCount>
+              SCM_PROVIDER: ${{inputs.scm_provider}}
+              BASE_BRANCH: ${{inputs.source_branch}}
+              SCM_CONNECTOR_REF: ${{inputs.scm_connector.id}}
+              DRONE_NETRC_MACHINE: ${{inputs.scm_connector.domain}}
+              DRONE_NETRC_USERNAME: ${{inputs.scm_connector.username}}
+              DRONE_NETRC_PASSWORD: ${{inputs.scm_connector.token}}
+              HARNESS_STO_SERVICE_TOKEN: <+sto.serviceToken>
+              HARNESS_STO_SERVICE_ENDPOINT: <+sto.serviceEndpoint>
+              HARNESS_BASE_URL: ${{inputs.harness_base_url}}
+              HARNESS_PIPELINE_ID: <+pipeline.identifier>
+              HARNESS_BUILD_NUMBER: <+pipeline.sequenceId>
+              ORIGIN_EXECUTION_ID: <+pipeline.executionId>
+              TRIGGERING_PIPELINE_ID: ${{inputs.triggering_pipeline_id}}
+              TRIGGERING_PIPELINE_EXECUTION_ID: ${{inputs.triggering_pipeline_execution_id}}
+              TRIGGERING_PIPELINE_BUILD_NUMBER: ${{inputs.triggering_pipeline_build_number}}
+              ISSUE_TYPES: ${{inputs.scan_types}}
+              SEVERITY_TYPES: ${{inputs.severity_types}}
+              ONLY_TRUE_POSITIVE_ISSUE_TYPES: ${{inputs.only_true_positive_issue_types}}
+              EXCLUDE_UNREACHABLE: ${{inputs.exclude_unreachable}}
+              EXCLUDE_REPO_PATTERNS: ${{inputs.exclude_repo_patterns}}
+              VALIDATION_MODE: ${{inputs.validation_mode}}
+              SCAN_PIPELINE_ID: ${{inputs.scan_pipeline_id}}
+              SCAN_PIPELINE_ORG: ${{inputs.scan_pipeline_org}}
+              SCAN_PIPELINE_PROJECT: ${{inputs.scan_pipeline_project}}
+              SCAN_INPUT_SET: ${{inputs.scan_input_set}}
+              BUILD_PIPELINE_ID: ${{inputs.build_pipeline_id}}
+              BUILD_PIPELINE_ORG: ${{inputs.build_pipeline_org}}
+              BUILD_PIPELINE_PROJECT: ${{inputs.build_pipeline_project}}
+              BUILD_INPUT_SET: ${{inputs.build_input_set}}
+              MAX_FIX_ATTEMPTS: ${{inputs.max_fix_attempts}}
+              REMEDIATION_TIME_BUDGET_SECONDS: ${{inputs.remediation_time_budget_seconds}}
+              PROMPT_VERSION: rem-v17
+
+        - name: Persist
+          id: persist
+          if: <+steps.scope.output.outputVariables.outcome> != "ZERO_IN_SCOPE"
+          run:
+            container:
+              image: harness/remediation-post-plugin:latest
+              connector: account.harnessImage
+              pull_policy: always
+            env:
+              EXECUTION_ID: ${{inputs.execution_id}}
+              ACCOUNT_ID: ${{inputs.account_id}}
+              ORG_ID: ${{inputs.org_id}}
+              PROJECT_ID: ${{inputs.project_id}}
+              SCAN_ID: ${{inputs.scan_id}}
+              TARGET_ID: ${{inputs.target_id}}
+              RESULT_FILE: /harness/sast_rem_result.json
+              SCOPE_FILE: /harness/sast_rem_scope.json
+              WORKFLOW_TYPE: REMEDIATION
+              TARGET_NAME: ${{inputs.target_name}}
+              TARGET_VARIANT_NAME: ${{inputs.target_variant_name}}
+              ORIGINAL_OCCURRENCE_COUNT: <+steps.scope.output.outputVariables.originalOccurrenceCount>
+              SCM_PROVIDER: ${{inputs.scm_provider}}
+              BASE_BRANCH: ${{inputs.source_branch}}
+              SCM_CONNECTOR_REF: ${{inputs.scm_connector.id}}
+              TRIGGERING_PIPELINE_BUILD_NUMBER: ${{inputs.triggering_pipeline_build_number}}
+              SCAN_PIPELINE_ID: ${{inputs.scan_pipeline_id}}
+              SCAN_PIPELINE_ORG: ${{inputs.scan_pipeline_org}}
+              SCAN_PIPELINE_PROJECT: ${{inputs.scan_pipeline_project}}
+              BUILD_PIPELINE_ID: ${{inputs.build_pipeline_id}}
+              BUILD_PIPELINE_ORG: ${{inputs.build_pipeline_org}}
+              BUILD_PIPELINE_PROJECT: ${{inputs.build_pipeline_project}}
+              ONLY_TRUE_POSITIVE_ISSUE_TYPES: ${{inputs.only_true_positive_issue_types}}
+              EXCLUDE_UNREACHABLE: ${{inputs.exclude_unreachable}}
+              ISSUE_TYPES: ${{inputs.scan_types}}
+              SEVERITY_TYPES: ${{inputs.severity_types}}
+              EXCLUDE_REPO_PATTERNS: ${{inputs.exclude_repo_patterns}}
+              MAX_OCCURRENCES: ${{inputs.max_occurrences}}
+              MODEL_NAME: ""
+              PROMPT_VERSION: rem-v17
+              JIRA_ENABLED: ${{inputs.jira_enabled}}
+              HARNESS_STO_SERVICE_TOKEN: <+sto.serviceToken>
+              HARNESS_STO_SERVICE_ENDPOINT: <+sto.serviceEndpoint>

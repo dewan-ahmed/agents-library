@@ -1,0 +1,80 @@
+pipeline:
+  name: Documentation Generator
+  identifier: documentationGenerator
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+        sparseCheckout: []
+  variables:
+    - name: llmConnector
+      type: String
+      description: Connector id for your LLM provider, for example account.myAnthropicConnector.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier your LLM connector exposes.
+      required: true
+      value: <+input>
+    - name: gitUserEmail
+      type: String
+      description: Email used for the automated commit.
+      required: true
+      value: <+input>.default(ci-bot@example.com)
+    - name: gitUserName
+      type: String
+      description: Author name used for the automated commit.
+      required: true
+      value: <+input>.default(Docs Agent)
+  stages:
+    - stage:
+        name: Generate Documentation
+        identifier: Generate_Documentation
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Documentation Agent
+                  identifier: Documentation_Agent
+                  spec:
+                    agentName: ca_documentation_generator
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+              - step:
+                  type: Run
+                  name: Commit Generated Docs
+                  identifier: Commit_Generated_Docs
+                  spec:
+                    shell: Sh
+                    command: |
+                      set -e
+                      git config user.email "<+pipeline.variables.gitUserEmail>"
+                      git config user.name  "<+pipeline.variables.gitUserName>"
+                      git add docs/
+                      if git diff --cached --quiet; then
+                        echo "No documentation changes to commit."
+                        exit 0
+                      fi
+                      BRANCH="docs/agent-update-<+pipeline.sequenceId>"
+                      git checkout -b "$BRANCH"
+                      git commit -m "docs: agent-generated update
+
+                      Regenerated docs/ via Documentation Agent.
+                      Pipeline: <+pipeline.executionUrl>"
+                      git push origin "$BRANCH"
+                      echo "Branch pushed: $BRANCH"

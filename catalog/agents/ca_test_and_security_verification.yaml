@@ -1,0 +1,87 @@
+version: 1
+agent:
+  step:
+    group:
+      steps:
+        - name: Agent
+          if: <+Always>
+          id: agent
+          run:
+            container:
+              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest
+            env:
+              PLUGIN_MAX_TURNS: 150
+              PLUGIN_TASK: |
+                You are a unit-test verification agent running in a Harness CI stage.
+                Analyze the repository already cloned at /harness. Determine what
+                percentage of independently testable services and components have
+                meaningful unit tests. The required threshold is
+                ${{inputs.coverageThreshold}} percent.
+
+                WORKFLOW
+                1. Discover service and component boundaries from manifests, workspace
+                   files, module definitions, and source directories.
+                2. Discover unit-test files and map each test suite to the service or
+                   component it exercises. Do not count generated tests, integration
+                   tests, or end-to-end tests as unit-test coverage.
+                3. Produce a denominator listing every testable service/component and
+                   a numerator listing those with evidence of meaningful unit tests.
+                4. Calculate: covered components / total testable components * 100.
+                   This is structural coverage, not line or branch coverage.
+                5. Print a concise report with the calculation, covered components,
+                   uncovered components, evidence, and PASS or FAIL.
+                6. If the result is below the threshold, use the configured Harness
+                   MCP connector to find the pipeline-execution interrupt/abort tool
+                   and stop execution ${{inputs.pipelineExecutionId}}. Confirm the
+                   target execution before calling the tool.
+                7. If the result meets the threshold, do not mutate the repository or
+                   call any Harness write tool.
+
+                RULES
+                - Never claim line coverage unless a coverage report provides it.
+                - Do not infer that a component is tested only because tests exist
+                  elsewhere in the repository.
+                - Never abort a different pipeline execution.
+                - Do not modify source code or tests.
+                - Do not reveal connector credentials or environment variables.
+                - Complete the report and required abort action before terminating.
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llmConnector.id}}
+              ANTHROPIC_MODEL: ${{inputs.modelName}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    mcpConnectors:
+      type: array
+      required: true
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+    coverageThreshold:
+      type: string
+      required: true
+      default: "90"
+    pipelineExecutionId:
+      type: string
+      required: true
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - mcpConnectors
+        - coverageThreshold

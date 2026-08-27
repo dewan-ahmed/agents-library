@@ -1,0 +1,37 @@
+pipeline:
+  name: Dockerfile Cache Optimization Sample
+  identifier: dockerfileCacheOptimizerSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Dockerfile Cache Optimization
+        identifier: Run_dockerfileCacheOptimizer
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Dockerfile Cache Optimization
+                  identifier: dockerfileCacheOptimizer
+                  spec:
+                    agentName: dockerfileCacheOptimizer
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>.default(global.anthropic.claude-opus-4-6-v1)
+                      mcp_connectors: <+input>

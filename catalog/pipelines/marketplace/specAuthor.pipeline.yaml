@@ -1,0 +1,37 @@
+pipeline:
+  name: Spec Authoring Sample
+  identifier: specAuthorSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Spec Authoring
+        identifier: Run_specAuthor
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Spec Authoring
+                  identifier: specAuthor
+                  spec:
+                    agentName: specAuthor
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>
+                      mcp_connectors: <+input>

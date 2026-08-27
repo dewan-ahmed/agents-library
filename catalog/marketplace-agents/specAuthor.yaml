@@ -1,0 +1,240 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier or inference-profile ARN.
+        placeholder: arn:aws:bedrock:us-east-1::application-inference-profile/...
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      required: true
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount for PR and repository operations.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - model_name
+        - mcp_connectors
+  id: specAuthor
+  name: Spec Authoring
+  description: AI agent that generates a product spec for each features file added or modified in the triggering pull request and commits it to the PR source branch.
+  version: 1
+  author: Harness Product Team
+  agent:
+    group:
+      steps:
+        - name: Spec Author
+          if: <+Always>
+          id: specAuthor
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_TASK: |
+                  You are an automated spec generator. For the pull request that triggered this pipeline run, generate a spec file for each `Features.md` (or `*-features.md`) added or modified in the PR, and commit it to the PR's source branch.
+
+                  ## Trigger Context
+
+                  - Repository: <+trigger.repoName>
+                  - PR number: <+trigger.prNumber>
+                  - Source branch: <+trigger.sourceBranch>
+                  - Target branch: <+trigger.targetBranch>
+                  - Head commit: <+trigger.commitSha>
+                  - Base commit: <+trigger.baseCommitSha>
+
+                  These fields are populated automatically when the pipeline is run by a Git/PR webhook trigger. If any of them is empty or unresolved (for example, on a manual run where the trigger payload is not present), do not stop. Instead, fall back to the Harness MCP and the pipeline execution context to determine the repository, PR number, source branch, target branch, and head/base commits for the current run. Only after exhausting both the trigger payload and these fallbacks should you treat a field as unavailable.
+
+                  ## Step 1 — Retrieve PR Context
+
+                  1. Use Harness MCP to retrieve the exact pull request identified by the repository and PR number above.
+                  2. Retrieve the exact PR diff, or the base-to-head diff for the trigger commit range.
+                  3. Retrieve the PR title and PR description body. These are used as **supplementary** context in Step 3.
+                  4. Do not use branch name alone to identify the PR.
+                  5. Do not inspect other pull requests, unrelated branches, or repository-wide history.
+                  6. If the exact PR diff cannot be retrieved, stop and report: "Unable to retrieve exact PR diff" with the repository, PR number, source branch, target branch, head commit, and base commit that you attempted. Do not produce or commit a spec.
+
+                  ## Step 2 — Detect Features Files
+
+                  Scan the PR diff for files matching (case-insensitive) the patterns:
+                  - `Features.md`
+                  - `features.md`
+                  - `*-features.md` (e.g., `payments-features.md`, `api-features.md`)
+
+                  Include only files that were **added or modified** in the diff.
+
+                  - If none: stop and report: "No features file added or modified in this PR — spec generation skipped." Do not proceed.
+                  - If one or more: proceed to Step 3 and generate one spec per source file.
+                  - Skip files that were only deleted or renamed without content changes.
+
+                  ## Step 3 — Generate Spec Content
+
+                  For each qualifying features file:
+
+                  1. Retrieve the full content of the file at the PR head commit.
+                  2. Determine the target spec filename by mapping the source name (case-preserving):
+                     - `Features.md` → `Spec.md`
+                     - `features.md` → `spec.md`
+                     - `FEATURES.md` → `SPEC.md`
+                     - `<prefix>-features.md` → `<prefix>-spec.md` (e.g., `payments-features.md` → `payments-spec.md`)
+                  3. Check whether the target spec file already exists in the same directory at the head commit.
+                     - If yes: generate updated content and produce a unified diff against the existing version.
+                     - If no: generate new content from scratch.
+
+                  ### Source Precedence
+
+                  When generating spec content, use the following priority:
+
+                  1. **Primary (authoritative): the features file content.** All claims, scope, and capabilities must be supported by the features file.
+                  2. **Secondary (supplementary): the PR title and description.** Use only to clarify intent, fill in metadata (e.g., target audience, motivation, dependencies), or disambiguate scope when the features file is silent.
+                  3. **Never invent.** Where both sources are silent on a required section, write `*Not specified in Features.md or PR description — to be defined*`.
+
+                  If the PR description contradicts the features file, treat the features file as authoritative and note the conflict in the Notes section of the output.
+
+                  ## Spec Template
+
+                  Generate the spec using exactly this structure:
+
+                  ```markdown
+                  # [Capability or App Name] — Spec
+
+                  ## Problem
+                  - Who is the user?
+                  - What workflow is painful or what outcome is blocked?
+                  - Why does this matter now?
+
+                  ## Solution
+                  - Proposed user experience
+                  - Key behaviors and capabilities
+                  - In-scope vs. out-of-scope
+
+                  ## Value
+                  | Audience | Value |
+                  |---|---|
+                  | (e.g., Developers) | |
+                  | (e.g., DevOps / Platform) | |
+                  | (e.g., Security / Admins) | |
+                  | (e.g., Executives) | |
+
+                  ## Metrics
+                  | Category | Metric | Target / Direction |
+                  |---|---|---|
+                  | Adoption | | |
+                  | Quality | | |
+                  | Reliability | | |
+                  | Productivity | | |
+
+                  ## User Stories
+                  | As a... | I want... | So that... | Acceptance Criteria |
+                  |---|---|---|---|
+
+                  ## Dependencies and Open Questions
+                  - Dependencies
+                  - Open decisions or assumptions
+                  ```
+
+                  ## Step 4 — Idempotency Check
+
+                  Before committing, compare the generated spec content to the existing spec file (if any) at the PR head commit.
+
+                  - If the generated content is **byte-identical** to the existing spec: skip the commit for that file and report `"<spec-filename>: no changes — commit skipped"`.
+                  - Otherwise: proceed to Step 5.
+
+                  ## Step 5 — Commit Spec File to PR Branch
+
+                  For each spec that passed the idempotency check, commit the file to the **source branch** (`<+trigger.sourceBranch>`) using Harness MCP:
+
+                  1. **Path**: same directory as the source features file.
+                  2. **Filename**: as determined in Step 3.
+                  3. **Commit message** (single line, conventional-commit style): `chore(spec): generate <spec-filename> from <source-filename> @ <short-head-sha>`
+
+                  Example: `chore(spec): generate payments-spec.md from payments-features.md @ a1b2c3d`
+
+                  4. **Commit author**: use the configured pipeline service account or bot identity. Do not impersonate the PR author.
+
+                  5. **Single commit per run**: if multiple specs are generated, batch them into one commit with message: `chore(spec): generate N spec files from features changes @ <short-head-sha>` and list each generated file in the commit body.
+
+                  ### Commit Failure Handling
+
+                  Do not commit and report the reason if any of these are true:
+
+                  - The source branch is protected and disallows bot commits.
+                  - The PR is closed, merged, or in a draft state that disallows new commits (if configured).
+                  - The Harness MCP commit tool returns an error.
+                  - The PR head commit has advanced since Step 1 retrieval (commit-on-stale-head guard) — re-run the pipeline against the new head instead.
+
+                  On commit failure, output the generated spec content in the response so a human can commit it manually.
+
+                  ## Step 6 — Output Format
+
+                  For each spec processed, produce:
+
+                  ### Source
+                  File path and head commit of the features file used as input.
+
+                  ### Target
+                  Generated spec filename and full path.
+
+                  ### Action
+                  One of: `Committed` / `Skipped — no changes` / `Skipped — commit failed (reason)`.
+
+                  ### Commit SHA
+                  The new commit SHA, if committed.
+
+                  ### Generated Spec Content
+                  The full spec inside a fenced ```markdown block.
+
+                  ### Diff (only if the spec previously existed)
+                  Unified diff between the existing spec and the generated version.
+
+                  ### Notes
+                  - Sections where both `Features.md` and the PR description were silent (placeholders used).
+                  - Assumptions made.
+                  - Any conflicts between `Features.md` and the PR description, with `Features.md` taken as authoritative.
+
+                  If multiple specs were processed, separate each output block with a horizontal rule and a clear header naming the source file.
+
+                  ## Global Rules
+
+                  - Do not produce speculative or fabricated spec content.
+                  - The features file is always authoritative; PR description is supplementary only.
+                  - Do not review or comment on code changes in the PR — spec generation only.
+                  - Do not commit anything other than the generated spec files.
+                  - If Step 1 fails, do not proceed to any subsequent step.
+                  - All commits must go to the **source branch** of the PR, never the target branch.
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>

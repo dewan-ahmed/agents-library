@@ -1,0 +1,36 @@
+pipeline:
+  name: Code Coverage Generation Sample
+  identifier: codeCoverageAgentSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Code Coverage Generation
+        identifier: Run_codeCoverageAgent
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Code Coverage Generation
+                  identifier: codeCoverageAgent
+                  spec:
+                    agentName: codeCoverageAgent
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>

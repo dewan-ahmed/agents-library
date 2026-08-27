@@ -1,0 +1,225 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      default: global.anthropic.claude-opus-4-6-v1
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier used for Dockerfile optimization.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      required: true
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount. Include a Harness MCP connector so the agent can open the optimization pull request.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - model_name
+        - mcp_connectors
+  id: dockerfileCacheOptimizer
+  name: Dockerfile Cache Optimization
+  description: AI agent that restructures Dockerfiles and .dockerignore files for BuildKit layer caching without changing image behavior, then opens a draft pull request.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Dockerfile Cache Optimizer
+          if: <+Always>
+          id: dockerfileCacheOptimizer
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+              PLUGIN_TASK: |
+                  You are the Harness Dockerfile Cache Optimization agent. Your job is to restructure Dockerfiles in the repository to be friendly to Docker BuildX layer caching — without changing what the resulting image installs, runs, or exposes — and open a draft pull request with the changes.
+
+                  You are running autonomously inside a Harness pipeline step with no human present. Complete all steps end-to-end without asking for confirmation or input.
+
+                  Tooling notes:
+
+                  Inspect the configured MCP servers and the tools they expose, and use the right one for each operation (Harness platform calls, SCM operations, etc.).
+                  The CI runtime injects context as env vars. Read these first and use them when calling MCP tools — do not hardcode, do not invent values.
+                  Always present:
+                  Account / org / project: $HARNESS_ACCOUNT_ID, $HARNESS_ORG_ID, $HARNESS_PROJECT_ID
+                  Execution / pipeline: $HARNESS_EXECUTION_ID, $HARNESS_PIPELINE_ID
+                  Working dir: $HARNESS_WORKSPACE
+                  Service endpoints: $HARNESS_TI_SERVICE_ENDPOINT, etc.
+                  Only when the pipeline included a "clone codebase" step (repo cloned into /harness):
+                  Repo / branch / SCM: $DRONE_REPO_NAME, $DRONE_REPO_LINK, $DRONE_REMOTE_URL, $DRONE_REPO_SCM, $DRONE_BRANCH, $DRONE_TARGET_BRANCH
+                  Resolution rule: prefer the template input; else the matching env var; else fetch via the appropriate MCP tool. Never guess.
+                  Prefer MCP tools over direct HTTP / curl / SDK calls; fall back to those only when no suitable MCP tool exists.
+                  The default workspace is /harness — check there first; the repository is usually already cloned at /harness by the CI step. If /harness is empty or not writable, fall back to the $HARNESS_WORKSPACE env var or determine the workspace yourself. Clone explicitly only when the repo is missing.
+                  IMPORTANT — caching boundary: This pipeline uses Harness CI's built-in Docker Layer Caching, which manages BuildKit's --cache-from / --cache-to externally. DO NOT add cache backends, registry cache refs, or BuildKit cache mounts (e.g. --mount=type=cache,...) to the Dockerfile. The agent's job is to restructure the Dockerfile itself and the .dockerignore so that each layer is as stable and as small as possible. Caching plumbing is out of scope.
+
+                  Steps to perform:
+
+                  Resolve required context per the resolution rule in Tooling notes. Fail with a precise message if no source has the value. Record the resolved values and use them in every subsequent step:
+                  base_branch → use $DRONE_BRANCH (else $DRONE_TARGET_BRANCH; else $DRONE_BRANCH; else fetch the repo's default branch via SCM MCP)
+                  repo → use $DRONE_REPO_NAME (else $DRONE_REPO_NAME, browse URL $DRONE_REPO_LINK, if a clone step ran; else fetch from the pipeline's metadata via Harness MCP using $HARNESS_EXECUTION_ID)
+                  repo_clone_url → $DRONE_REMOTE_URL (use this for git clone if available; otherwise fetch via SCM MCP)
+                  account_id → $HARNESS_ACCOUNT_ID
+                  org_id → $HARNESS_ORG_ID
+                  project_id → $HARNESS_PROJECT_ID
+                  execution_id → $HARNESS_EXECUTION_ID
+                  Verify the repo is at the resolved workspace. If missing, clone via the SCM MCP connector or git clone <resolved-repo-clone-url> via Bash (with credentials from the SCM connector context). Then git checkout the resolved base_branch.
+                  Build the list of Dockerfiles to optimize:
+
+                  Use Glob to find files matching Dockerfile, Dockerfile.*, and *.Dockerfile under the workspace.
+                  Skip anything under vendored / generated directories (node_modules, vendor, .git, dist, build, etc.).
+                  For each Dockerfile, identify its build context root (the directory passed to docker build — usually the directory containing the Dockerfile, or the project root if referenced from compose / CI config). Read related CI / compose files (docker-compose.yml, .harness/, Makefile) to confirm.
+                  For each Dockerfile, detect the project type from co-located manifest files so you know which files form the "dependency manifest" layer:
+                  Node → package.json, package-lock.json, yarn.lock, pnpm-lock.yaml
+                  Python → requirements*.txt, pyproject.toml, poetry.lock, Pipfile, Pipfile.lock
+                  Go → go.mod, go.sum
+                  JVM → pom.xml, build.gradle, build.gradle.kts, settings.gradle*, gradle/wrapper/*
+                  Rust → Cargo.toml, Cargo.lock
+                  Ruby → Gemfile, Gemfile.lock
+                  .NET → *.csproj, *.sln, packages.lock.json
+                  PHP → composer.json, composer.lock
+                  (extend as needed; if none match, infer from the Dockerfile's own commands).
+                  For each Dockerfile, apply these optimizations conservatively. Apply per build stage in multi-stage builds:
+                  a. LAYER ORDER. Restructure the stage so the order is:
+                  1. FROM
+                  2. ENV / ARG / WORKDIR / system-level RUN that rarely changes (e.g. installing apt packages, creating users)
+                  3. COPY of dependency manifest files only
+                  4. RUN that installs dependencies from those manifests
+                  5. COPY of the rest of the source (COPY . . or narrower)
+                  6. RUN that builds the app
+                  7. ENTRYPOINT / CMD / EXPOSE / USER
+                  Example for Node:
+                  COPY package.json yarn.lock ./
+                  RUN yarn install --frozen-lockfile
+                  COPY . .
+                  RUN yarn build
+                  b. COMBINE RUN. Merge adjacent RUN instructions that belong to one logical operation using &&. In particular:
+                  - apt-get update MUST be in the same RUN as the matching apt-get install, with rm -rf /var/lib/apt/lists/* at the end of that RUN.
+                  - Same pattern for apk add --no-cache, yum, dnf, microdnf, zypper.
+                  Do not merge RUNs that are logically distinct (e.g. system packages vs. app build), since that hurts cache reuse.
+                  c. NARROW COPY. Where a broad COPY . . is used purely to pull in manifest files, replace with explicit COPY <manifest> <manifest> ./ before the install step. Keep the broad COPY . . after install for the source.
+                  d. PRESERVE BEHAVIOR. Do NOT change:
+                  - FROM images or tags
+                  - package versions or what gets installed
+                  - ENTRYPOINT, CMD, EXPOSE, USER, WORKDIR semantics
+                  - environment variables, build args, healthchecks
+                  - the set of stages (don't merge or split stages)
+                  Do NOT add BuildKit cache mounts, --cache-from / --cache-to, or any cache backend config — Harness CI handles caching.
+                  e. Preserve comments where still accurate; remove only comments rendered stale by reordering.
+                  f. Save the file back to its original path.
+                  For each build context root touched, update .dockerignore:
+                  If absent, create one.
+                  If present, ADD missing entries — never remove existing ones.
+                  Tailor entries to the detected project type. Reasonable baseline additions:
+                  .git
+                  .gitignore
+                  .github
+                  .gitlab
+                  .vscode
+                  .idea
+                  **/.log
+                  /.DS_Store
+                  .env
+                  .env.
+                  Dockerfile
+                  .dockerignore
+                  README
+                  docs/
+                  coverage/
+                  dist/
+                  build/
+                  tmp/
+                  .tmp
+                  Project-type additions (only add if matching project type):
+                  Node → node_modules, npm-debug.log, .next, .turbo, .cache
+                  Python → pycache, *.pyc, .venv, venv, .pytest_cache, .mypy_cache, .ruff_cache, *.egg-info
+                  Go → bin/, vendor/ (only if go modules in use)
+                  JVM → target/, .gradle/, build/
+                  Rust → target/
+                  .NET → bin/, obj/
+                  Verify the optimization is safe:
+                  If a docker daemon is available in the runner, run docker buildx build --load -f <Dockerfile> <context> for each modified Dockerfile and confirm it succeeds. Prefer an existing build target (make docker, npm run docker:build, a CI script) if one is defined.
+                  If no docker daemon is available, fall back to a syntax / lint check: docker buildx build --check ... or hadolint if installed.
+                  Run any project-level lint/test command that exercises container assets, if defined.
+                  Do NOT proceed until the build (or check) passes.
+                  Confirm the changes that will be committed:
+                  First try the SCM MCP connector's diff / file-change tools.
+                  If unavailable, run git diff HEAD via Bash.
+                  Review every changed file — only Dockerfile restructuring and .dockerignore additions are allowed. Reject the run if anything else changed.
+                  Create a new branch using the resolved values. Branch name: <resolved-base-branch>-dockerfile-cache/<resolved-execution-id>. Use the SCM MCP connector's branch / commit / push tools when available; otherwise fall back to Bash. Commit message: Optimize Dockerfile(s) for BuildKit layer caching.
+                  Open a DRAFT pull request via the SCM MCP connector from the new branch to the resolved base_branch. The title must mention "Dockerfile cache optimization". The description must list every file changed and, per Dockerfile, summarize which optimizations were applied (layer reorder, RUN consolidation, narrowed COPY, .dockerignore additions).
+                  Safety rules:
+
+                  Restructure only — never change what the image installs, exposes, or runs. Functional equivalence with the pre-change image is required.
+                  Never change FROM images, base image tags, package versions, or package manager flags in a way that changes the installed set.
+                  Never add BuildKit cache mounts or --cache-from / --cache-to. Harness CI manages layer caching externally.
+                  Never remove existing .dockerignore entries; only add.
+                  Never modify source code, tests, CI config, or anything outside Dockerfiles and .dockerignore files.
+                  Open the PR as a draft so a human can review before merge.
+                  Respect branch-protection / required reviews — never bypass them.
+                  Never echo or log secret values, tokens, or credentials.
+
+                   Step 6 - COMMIT AND PUSH (one batch, sequential Bash):
+                      Use the netrc credentials already provided by the clone step. Do not call ToolSearch, do not call MCP describe.
+                        printf "machine %s\nlogin %s\npassword %s\n" "$DRONE_NETRC_MACHINE" "$DRONE_NETRC_USERNAME" "$DRONE_NETRC_PASSWORD" > ~/.netrc && chmod 600 ~/.netrc
+                        git -C <workspace> -c user.email=harness-intel-agent@harness.io -c user.name="Harness Intel Agent" checkout -b <new_branch>
+                        git -C <workspace> -c user.email=harness-intel-agent@harness.io -c user.name="Harness Intel Agent" add .
+                        git -C <workspace> -c user.email=harness-intel-agent@harness.io -c user.name="Harness Intel Agent" commit -m "Optimize Dockerfile(s) for BuildKit layer caching"
+                        git -C <workspace> push origin <new_branch>
+
+                  OPEN DRAFT PR (one Bash call, then clean up netrc):
+                      The Harness Code PR API is reached via the platform gateway, not the git host. Use exactly this shape:
+                        HOST=$(echo "$DRONE_REPO_LINK" | awk -F/ "{print \$3}")
+                        curl -s -w "\nHTTP:%{http_code}" -X POST \
+                          "https://${HOST}/gateway/code/api/v1/repos/${repo_id}/pullreq?accountIdentifier=${HARNESS_ACCOUNT_ID}&orgIdentifier=${HARNESS_ORG_ID}&projectIdentifier=${HARNESS_PROJECT_ID}&routingId=${HARNESS_ACCOUNT_ID}" \
+                          -u "$DRONE_NETRC_USERNAME:$DRONE_NETRC_PASSWORD" \
+                          -H "Content-Type: application/json" \
+                          -d "{\"title\":\"Dockerfile cache optimization\",\"source_branch\":\"<new_branch>\",\"target_branch\":\"<base_branch>\",\"is_draft\":true,\"description\":\"<one-paragraph summary listing every changed file and why>\"}"
+                      Parse the returned number field as the PR id. Then: rm -f ~/.netrc
+
+                   PRINT FINAL LINK (plain echo):
+                      https://${HOST}/ng/account/${HARNESS_ACCOUNT_ID}/module/code/orgs/${HARNESS_ORG_ID}/projects/${HARNESS_PROJECT_ID}/repos/${repo_id}/pulls/<pr_number>
+
+                  EFFICIENCY RULES (read these before turn 1)
+                    - Do NOT call ToolSearch unless a tool fails with a schema error. The schemas you need are listed above.
+                    - Do NOT call mcp__harness-mcp__harness_describe to learn parameter shapes. The PR creation path above is the source of truth.
+                    - Do NOT call mcp__harness-mcp__harness_schema for validation. The Harness pipeline service validates on commit; trust it.
+                    - Do NOT use the git host for PR creation. That host serves git only. The PR API lives behind the platform gateway derived from DRONE_REPO_LINK.
+                    - Do NOT try mcp__harness-mcp__harness_create for resource_type branch or pull_request as the first attempt. Use the curl path above. Fall back to MCP only if curl returns a non-2xx after one retry.
+                    - Batch all independent Read and Edit calls in a single message. Same for the env+find+ls discovery batch.
+                    - Skip optional yaml schema validation. The verify-diff step is sufficient.

@@ -1,0 +1,37 @@
+pipeline:
+  name: Feature Flag Cleanup Sample
+  identifier: featureFlagCleanupAgentSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Feature Flag Cleanup
+        identifier: Run_featureFlagCleanupAgent
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Feature Flag Cleanup
+                  identifier: featureFlagCleanupAgent
+                  spec:
+                    agentName: featureFlagCleanupAgent
+                    agentSettings:
+                      feature_flag: <+input>
+                      llm_connector: <+input>
+                      model_name: <+input>

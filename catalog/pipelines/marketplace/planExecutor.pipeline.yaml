@@ -1,0 +1,37 @@
+pipeline:
+  name: Plan Execution Sample
+  identifier: planExecutorSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Plan Execution
+        identifier: Run_planExecutor
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Plan Execution
+                  identifier: planExecutor
+                  spec:
+                    agentName: planExecutor
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>
+                      mcp_connectors: <+input>

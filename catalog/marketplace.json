@@ -1,0 +1,2753 @@
+{
+  "source": "Harness global template catalog",
+  "syncedAt": "2026-08-23T02:37:28.207Z",
+  "count": 31,
+  "agents": [
+    {
+      "id": "remediationAgent",
+      "harnessAgentId": "remediationAgent",
+      "name": "Auto-Remediation",
+      "summary": "AI agent that fixes findings from a scan, validates the fix branch (build + re-scan), and opens one pull request with per-issue commits. Phase 1 keeps partial fixes and always opens the PR with a status summary.",
+      "description": "AI agent that fixes findings from a scan, validates the fix branch (build + re-scan), and opens one pull request with per-issue commits. Phase 1 keeps partial fixes and always opens the PR with a status summary.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request",
+        "scan_finding"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "scm_connector",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the large language model connector used to generate fixes. Sub-agents require an Anthropic (Claude) backend today."
+        },
+        {
+          "key": "scm_connector",
+          "label": "SCM Connector (Github, Gitlab, Bitbucket, AzureRepo, Git)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.scm_connector",
+          "note": "Select the source control connector for the repository being remediated. It both clones the codebase into the stage and pushes the fix branch to open the pull request, so its credential must allow pushes and pull request creation. For GitHub, use HTTP authentication with a personal access token that holds the classic repo scope; for Harness Code, use a Git connector with a personal access token. Stamped from the AI Workflow configuration and required because this agent runs outside the project where the repository lives."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Select the Model Context Protocol connectors the agent mounts for Harness pipeline execution, failure diagnosis, and finding reads."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "SCM Connector (Github, Gitlab, Bitbucket, AzureRepo, Git)"
+      ],
+      "keywords": [
+        "auto",
+        "remediation",
+        "fixes",
+        "findings",
+        "scan",
+        "validates",
+        "fix",
+        "branch",
+        "build",
+        "pull",
+        "request",
+        "per",
+        "issue",
+        "commits",
+        "phase",
+        "keeps",
+        "partial",
+        "always",
+        "status",
+        "summary"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:20.670Z"
+    },
+    {
+      "id": "autofixAgent",
+      "harnessAgentId": "autofixAgent",
+      "name": "CI Failure Autofix",
+      "summary": "AI agent that identifies the root cause of a CI pipeline failure, applies a targeted fix, and commits it to the current branch.",
+      "description": "AI agent that identifies the root cause of a CI pipeline failure, applies a targeted fix, and commits it to the current branch.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "failed_pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount (e.g. Harness Code MCP, GitHub MCP) used for SCM operations like reading the repo, checking the diff, committing, and pushing to the current branch."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "failure",
+        "autofix",
+        "identifies",
+        "root",
+        "cause",
+        "applies",
+        "targeted",
+        "fix",
+        "commits",
+        "branch"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:22.976Z"
+    },
+    {
+      "id": "buildTurbo",
+      "harnessAgentId": "buildTurbo",
+      "name": "CI Intelligence Enablement",
+      "summary": "AI agent that auto-enables Harness CI cache and build intelligence across pipeline YAMLs, optionally injects a test agent and Docker layer caching, then opens a draft pull request.",
+      "description": "AI agent that auto-enables Harness CI cache and build intelligence across pipeline YAMLs, optionally injects a test agent and Docker layer caching, then opens a draft pull request.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier used for intelligence enablement."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount. Include a Harness MCP connector so the agent can open the enablement pull request."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)"
+      ],
+      "keywords": [
+        "intelligence",
+        "enablement",
+        "auto",
+        "enables",
+        "cache",
+        "build",
+        "across",
+        "yamls",
+        "optionally",
+        "injects",
+        "test",
+        "docker",
+        "layer",
+        "caching",
+        "draft",
+        "pull",
+        "request"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:25.896Z"
+    },
+    {
+      "id": "claudeCodeSecurityAgent",
+      "harnessAgentId": "claudeCodeSecurityAgent",
+      "name": "Claude Code Security Review",
+      "summary": "AI agent that performs a security review on pull request diff, writes SARIF findings, and emits severity counts as step output variables for policy evaluation.",
+      "description": "AI agent that performs a security review on pull request diff, writes SARIF findings, and emits severity counts as step output variables for policy evaluation.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request",
+        "scan_finding"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used for Claude Code Security review (Anthropic or Bedrock)."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector"
+      ],
+      "keywords": [
+        "claude",
+        "code",
+        "security",
+        "review",
+        "performs",
+        "pull",
+        "request",
+        "diff",
+        "writes",
+        "sarif",
+        "findings",
+        "emits",
+        "severity",
+        "counts",
+        "step",
+        "output",
+        "variables",
+        "policy",
+        "evaluation"
+      ],
+      "iconName": "anthropic",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:21.182Z"
+    },
+    {
+      "id": "codeCoverageAgent",
+      "harnessAgentId": "codeCoverageAgent",
+      "name": "Code Coverage Generation",
+      "summary": "AI agent that analyzes the codebase, generates meaningful unit tests to close coverage gaps, and commits them to the current branch.",
+      "description": "AI agent that analyzes the codebase, generates meaningful unit tests to close coverage gaps, and commits them to the current branch.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount (e.g. Harness Code MCP, GitHub MCP). Used for SCM operations such as reading the repo, checking the diff, committing, and pushing to the current branch."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "code",
+        "coverage",
+        "generation",
+        "analyzes",
+        "generates",
+        "meaningful",
+        "unit",
+        "tests",
+        "close",
+        "gaps",
+        "commits",
+        "them",
+        "branch"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:26.334Z"
+    },
+    {
+      "id": "aiCodeReviewAgent",
+      "harnessAgentId": "aiCodeReviewAgent",
+      "name": "Code Review",
+      "summary": "Coming soon — not yet ready for use. AI agent that reviews the pull request that triggered the pipeline, generating review instructions from the diff and posting inline comments, an AI overview, success-criteria results, and suggested reviewers.",
+      "description": "Coming soon — not yet ready for use. AI agent that reviews the pull request that triggered the pipeline, generating review instructions from the diff and posting inline comments, an AI overview, success-criteria results, and suggested reviewers.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "coming_soon",
+      "inputs": [],
+      "configuration": [],
+      "prerequisites": [],
+      "keywords": [
+        "code",
+        "review",
+        "coming",
+        "soon",
+        "yet",
+        "ready",
+        "use",
+        "reviews",
+        "pull",
+        "request",
+        "triggered",
+        "generating",
+        "instructions",
+        "diff",
+        "posting",
+        "inline",
+        "comments",
+        "overview",
+        "success",
+        "criteria"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:20.356Z"
+    },
+    {
+      "id": "complianceAuditAgent",
+      "harnessAgentId": "complianceAuditAgent",
+      "name": "Compliance Audit",
+      "summary": "AI agent that audits Harness configurations against secure-SDLC and compliance frameworks and produces a findings report.",
+      "description": "AI agent that audits Harness configurations against secure-SDLC and compliance frameworks and produces a findings report.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure",
+        "govern"
+      ],
+      "modules": [
+        "sto",
+        "platform"
+      ],
+      "triggers": [
+        "pipeline",
+        "scan_finding"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors",
+        "prompt"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount for the audit (Harness MCP, Confluence MCP, Compliance MCP, etc.)."
+        },
+        {
+          "key": "prompt",
+          "label": "Audit Question",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.prompt",
+          "note": "Enter the audit question or assessment request for the security auditor agent to answer."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)",
+        "Audit Question"
+      ],
+      "keywords": [
+        "compliance",
+        "audit",
+        "audits",
+        "configurations",
+        "against",
+        "secure",
+        "sdlc",
+        "frameworks",
+        "findings",
+        "report"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:27.186Z"
+    },
+    {
+      "id": "databaseImpactAnalysis",
+      "harnessAgentId": "databaseImpactAnalysis",
+      "name": "Database Impact Analysis",
+      "summary": "AI agent that analyzes SQL changes for zero-downtime safety and reports a pass or fail verdict as an output variable.",
+      "description": "AI agent that analyzes SQL changes for zero-downtime safety and reports a pass or fail verdict as an output variable.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "sql",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "sql",
+          "label": "SQL",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.sql",
+          "note": "Enter the SQL migration or change script to analyze for zero-downtime safety."
+        },
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount for additional schema or database context, if needed."
+        }
+      ],
+      "prerequisites": [
+        "SQL",
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "database",
+        "impact",
+        "analysis",
+        "analyzes",
+        "sql",
+        "zero",
+        "downtime",
+        "safety",
+        "pass",
+        "fail",
+        "verdict",
+        "output",
+        "variable"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:20.888Z"
+    },
+    {
+      "id": "dockerfileCacheOptimizer",
+      "harnessAgentId": "dockerfileCacheOptimizer",
+      "name": "Dockerfile Cache Optimization",
+      "summary": "AI agent that restructures Dockerfiles and .dockerignore files for BuildKit layer caching without changing image behavior, then opens a draft pull request.",
+      "description": "AI agent that restructures Dockerfiles and .dockerignore files for BuildKit layer caching without changing image behavior, then opens a draft pull request.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier used for Dockerfile optimization."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount. Include a Harness MCP connector so the agent can open the optimization pull request."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)"
+      ],
+      "keywords": [
+        "dockerfile",
+        "cache",
+        "optimization",
+        "restructures",
+        "dockerfiles",
+        "dockerignore",
+        "files",
+        "buildkit",
+        "layer",
+        "caching",
+        "without",
+        "changing",
+        "image",
+        "behavior",
+        "draft",
+        "pull",
+        "request"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:21.707Z"
+    },
+    {
+      "id": "triageAgent",
+      "harnessAgentId": "triageAgent",
+      "name": "False Positive Triage",
+      "summary": "AI agent that triages security scan findings as true or false positives and persists the verdicts back to the platform.",
+      "description": "AI agent that triages security scan findings as true or false positives and persists the verdicts back to the platform.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure"
+      ],
+      "modules": [
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "scan_finding"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used for triage. Supplied per-account from the FP Triage agent configuration; override only if this run should use a different connector."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector"
+      ],
+      "keywords": [
+        "false",
+        "positive",
+        "triage",
+        "triages",
+        "security",
+        "scan",
+        "findings",
+        "true",
+        "positives",
+        "persists",
+        "verdicts",
+        "back",
+        "platform"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:25.612Z"
+    },
+    {
+      "id": "featureCommitter",
+      "harnessAgentId": "featureCommitter",
+      "name": "Feature File Commit",
+      "summary": "AI agent that commits a generated AISDLC feature file to a new Harness Code branch so a downstream step can open a pull request, performing no other repository writes; requires the feature file produced by the Jira Feature Ingestion agent.",
+      "description": "AI agent that commits a generated AISDLC feature file to a new Harness Code branch so a downstream step can open a pull request, performing no other repository writes; requires the feature file produced by the Jira Feature Ingestion agent.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request",
+        "jira_issue"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "mcp_connectors",
+        "repo_id",
+        "org_id",
+        "project_id"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify the MCP connector refs to mount. Include a Harness MCP connector so the agent can create the branch and commit."
+        },
+        {
+          "key": "repo_id",
+          "label": "Repository ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.repo_id",
+          "note": "Enter the Harness Code repository identifier that receives the commit."
+        },
+        {
+          "key": "org_id",
+          "label": "Organization ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.org_id",
+          "note": "Enter the Harness organization identifier that scopes the repository."
+        },
+        {
+          "key": "project_id",
+          "label": "Project ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.project_id",
+          "note": "Enter the Harness project identifier that scopes the repository."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Repository ID",
+        "Organization ID",
+        "Project ID"
+      ],
+      "keywords": [
+        "feature",
+        "file",
+        "commit",
+        "commits",
+        "generated",
+        "aisdlc",
+        "new",
+        "code",
+        "branch",
+        "downstream",
+        "step",
+        "can",
+        "open",
+        "pull",
+        "request",
+        "performing",
+        "other",
+        "repository",
+        "writes",
+        "requires"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:24.757Z"
+    },
+    {
+      "id": "featureFlagCleanupAgent",
+      "harnessAgentId": "featureFlagCleanupAgent",
+      "name": "Feature Flag Cleanup",
+      "summary": "AI agent that safely removes references to a stale feature flag, keeps the chosen treatment, and commits the cleanup to the current branch.",
+      "description": "AI agent that safely removes references to a stale feature flag, keeps the chosen treatment, and commits the cleanup to the current branch.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "release",
+        "build"
+      ],
+      "modules": [
+        "fme"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "feature_flag",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "feature_flag",
+          "label": "Feature Flag",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.feature_flag",
+          "note": "Enter the feature flag name to clean up."
+        },
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount (e.g. Harness Code MCP, GitHub MCP). Used for SCM operations such as reading the repo, checking the diff, committing, and pushing the cleanup to the current branch."
+        }
+      ],
+      "prerequisites": [
+        "Feature Flag",
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "feature",
+        "flag",
+        "cleanup",
+        "safely",
+        "removes",
+        "references",
+        "stale",
+        "keeps",
+        "chosen",
+        "treatment",
+        "commits",
+        "branch"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:24.536Z"
+    },
+    {
+      "id": "featureSpecPlanner",
+      "harnessAgentId": "featureSpecPlanner",
+      "name": "Feature Spec Planning",
+      "summary": "AI agent that generates a product spec and coding plan for each features file added or modified in the triggering pull request, then commits the artifacts to the PR source branch.",
+      "description": "AI agent that generates a product spec and coding plan for each features file added or modified in the triggering pull request, then commits the artifacts to the PR source branch.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount for PR and repository operations."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)"
+      ],
+      "keywords": [
+        "feature",
+        "spec",
+        "planning",
+        "generates",
+        "product",
+        "coding",
+        "plan",
+        "features",
+        "file",
+        "added",
+        "modified",
+        "pull",
+        "request",
+        "commits",
+        "artifacts",
+        "branch"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:22.459Z"
+    },
+    {
+      "id": "iacDiscovery",
+      "harnessAgentId": "iacDiscovery",
+      "name": "IaC Discovery",
+      "summary": "AI agent that inventories live AWS resources via connector, compares them against Terraform, OpenTofu, and Terragrunt code, and reports the cloud resources that are not managed by Infrastructure as Code.",
+      "description": "AI agent that inventories live AWS resources via connector, compares them against Terraform, OpenTofu, and Terragrunt code, and reports the cloud resources that are not managed by Infrastructure as Code.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "iacm"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the model identifier used for IaC discovery analysis."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount for cloud and Harness data collection."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)"
+      ],
+      "keywords": [
+        "iac",
+        "discovery",
+        "inventories",
+        "live",
+        "aws",
+        "resources",
+        "via",
+        "connector",
+        "compares",
+        "them",
+        "against",
+        "terraform",
+        "opentofu",
+        "terragrunt",
+        "code",
+        "cloud",
+        "managed",
+        "infrastructure"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:27.904Z"
+    },
+    {
+      "id": "iacmCostRemediator",
+      "harnessAgentId": "iacmCostRemediator",
+      "name": "IaCM Cost Remediation",
+      "summary": "AI agent that evaluates a cloud-cost recommendation against an OpenTofu codebase and, when the change is safe, applies it and opens a pull request.",
+      "description": "AI agent that evaluates a cloud-cost recommendation against an OpenTofu codebase and, when the change is safe, applies it and opens a pull request.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure",
+        "cost",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "iacm"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors",
+        "recommendation",
+        "agent_name",
+        "pipeline_id",
+        "harness_base_url",
+        "harness_token_secret"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the model identifier used for remediation analysis."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount for code and Harness operations."
+        },
+        {
+          "key": "recommendation",
+          "label": "Recommendation",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.recommendation",
+          "note": "Enter the cost remediation recommendation payload to evaluate."
+        },
+        {
+          "key": "agent_name",
+          "label": "Agent Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.agent_name",
+          "note": "Enter the agent name used for remediation memory lookup."
+        },
+        {
+          "key": "pipeline_id",
+          "label": "Pipeline ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.pipeline_id",
+          "note": "Enter the pipeline identifier used to derive sandbox memory scope."
+        },
+        {
+          "key": "harness_base_url",
+          "label": "Harness Base URL",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.harness_base_url",
+          "note": "Enter the Harness base URL used by remediation API operations."
+        },
+        {
+          "key": "harness_token_secret",
+          "label": "Harness Token Secret",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_token_secret",
+          "note": "Select the Harness secret that stores the API key for remediation commits and PR creation."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)",
+        "Recommendation",
+        "Agent Name",
+        "Pipeline ID",
+        "Harness Base URL",
+        "Harness Token Secret"
+      ],
+      "keywords": [
+        "iacm",
+        "cost",
+        "remediation",
+        "evaluates",
+        "cloud",
+        "recommendation",
+        "against",
+        "opentofu",
+        "when",
+        "change",
+        "safe",
+        "applies",
+        "pull",
+        "request"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:25.076Z"
+    },
+    {
+      "id": "iacmRemediationAgent",
+      "harnessAgentId": "iacmRemediationAgent",
+      "name": "IaCM Remediation",
+      "summary": "AI agent that remediates IaCM drift, security, and cloud-cost findings by editing Terraform or OpenTofu source and committing the fix to the current branch.",
+      "description": "AI agent that remediates IaCM drift, security, and cloud-cost findings by editing Terraform or OpenTofu source and committing the fix to the current branch.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure",
+        "cost",
+        "build"
+      ],
+      "modules": [
+        "sto",
+        "iacm"
+      ],
+      "triggers": [
+        "pipeline",
+        "scan_finding"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "workspace",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "workspace",
+          "label": "IaCM Workspace",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.workspace",
+          "note": "Enter the IaCM workspace identifier whose drift / recommendations will be remediated."
+        },
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount (Harness Code MCP, GitHub MCP, GitLab MCP, etc.) used for SCM operations such as committing and pushing the remediation to the current branch."
+        }
+      ],
+      "prerequisites": [
+        "IaCM Workspace",
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "iacm",
+        "remediation",
+        "remediates",
+        "drift",
+        "security",
+        "cloud",
+        "cost",
+        "findings",
+        "editing",
+        "terraform",
+        "opentofu",
+        "committing",
+        "fix",
+        "branch"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:26.951Z"
+    },
+    {
+      "id": "featureIngester",
+      "harnessAgentId": "featureIngester",
+      "name": "Jira Feature Ingestion",
+      "summary": "AI agent that turns the triggering Jira issue into a scoped Features.md and a reasoning companion in the workspace for downstream AISDLC steps to commit, without calling any MCP or committing anything itself.",
+      "description": "AI agent that turns the triggering Jira issue into a scoped Features.md and a reasoning companion in the workspace for downstream AISDLC steps to commit, without calling any MCP or committing anything itself.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "jira_issue"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector"
+      ],
+      "keywords": [
+        "jira",
+        "feature",
+        "ingestion",
+        "turns",
+        "issue",
+        "scoped",
+        "features",
+        "reasoning",
+        "companion",
+        "workspace",
+        "downstream",
+        "aisdlc",
+        "steps",
+        "commit",
+        "without",
+        "calling",
+        "any",
+        "mcp",
+        "committing",
+        "anything"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:24.016Z"
+    },
+    {
+      "id": "manifestRemediatorAgent",
+      "harnessAgentId": "manifestRemediatorAgent",
+      "name": "Kubernetes Manifest Remediation",
+      "summary": "AI agent that analyzes Kubernetes and Helm deployment failures and produces a structured remediation YAML with actionable fixes.",
+      "description": "AI agent that analyzes Kubernetes and Helm deployment failures and produces a structured remediation YAML with actionable fixes.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure",
+        "release",
+        "build"
+      ],
+      "modules": [
+        "cd"
+      ],
+      "triggers": [
+        "pipeline",
+        "failed_pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount. Include a Harness MCP connector to fetch logs and execution metadata; add SCM connectors as needed."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "kubernetes",
+        "manifest",
+        "remediation",
+        "analyzes",
+        "helm",
+        "deployment",
+        "failures",
+        "structured",
+        "yaml",
+        "actionable",
+        "fixes"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:27.473Z"
+    },
+    {
+      "id": "mythosReadinessCollector",
+      "harnessAgentId": "mythosReadinessCollector",
+      "name": "Mythos Readiness Collection",
+      "summary": "AI agent that collects raw Harness platform configuration data (pipelines, security testing, deployments, governance, and more) and emits it as a fixed-schema JSON readiness snapshot.",
+      "description": "AI agent that collects raw Harness platform configuration data (pipelines, security testing, deployments, governance, and more) and emits it as a fixed-schema JSON readiness snapshot.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure",
+        "test",
+        "release",
+        "monitor",
+        "govern",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "sto",
+        "cd",
+        "idp",
+        "platform"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors",
+        "account_id",
+        "org_id",
+        "project_id"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount. Include a Harness MCP connector to fetch platform data."
+        },
+        {
+          "key": "account_id",
+          "label": "Account ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.account_id",
+          "note": "Enter the Harness account ID for data collection scope."
+        },
+        {
+          "key": "org_id",
+          "label": "Org ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.org_id",
+          "note": "Enter the Harness organization ID for data collection scope."
+        },
+        {
+          "key": "project_id",
+          "label": "Project ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.project_id",
+          "note": "Enter the Harness project ID for data collection scope."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)",
+        "Account ID",
+        "Org ID",
+        "Project ID"
+      ],
+      "keywords": [
+        "mythos",
+        "readiness",
+        "collection",
+        "collects",
+        "raw",
+        "platform",
+        "configuration",
+        "data",
+        "pipelines",
+        "security",
+        "testing",
+        "deployments",
+        "governance",
+        "more",
+        "emits",
+        "fixed",
+        "schema",
+        "json",
+        "snapshot"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:23.503Z"
+    },
+    {
+      "id": "outdatedTestUpdater",
+      "harnessAgentId": "outdatedTestUpdater",
+      "name": "Outdated Test Update",
+      "summary": "AI agent that reads triaged outdated tests and updates each one to reflect intentional application changes as an independent, reviewable commit; requires the outdated-tests report produced by the Test Failure Classification agent.",
+      "description": "AI agent that reads triaged outdated tests and updates each one to reflect intentional application changes as an independent, reviewable commit; requires the outdated-tests report produced by the Test Failure Classification agent.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier used for test maintenance."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "outdated",
+        "test",
+        "update",
+        "reads",
+        "triaged",
+        "tests",
+        "updates",
+        "reflect",
+        "intentional",
+        "application",
+        "independent",
+        "reviewable",
+        "commit",
+        "requires",
+        "report",
+        "produced",
+        "failure",
+        "classification"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:23.281Z"
+    },
+    {
+      "id": "planExecutor",
+      "harnessAgentId": "planExecutor",
+      "name": "Plan Execution",
+      "summary": "AI agent that implements the committed coding plan for the triggering pull request, completing unfinished tasks in order, running tests, and committing the changes to the PR source branch for human review; requires the coding plan produced by the Feature Spec Planning agent.",
+      "description": "AI agent that implements the committed coding plan for the triggering pull request, completing unfinished tasks in order, running tests, and committing the changes to the PR source branch for human review; requires the coding plan produced by the Feature Spec Planning agent.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "test",
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount for PR and repository operations."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)"
+      ],
+      "keywords": [
+        "plan",
+        "execution",
+        "implements",
+        "committed",
+        "coding",
+        "pull",
+        "request",
+        "completing",
+        "unfinished",
+        "tasks",
+        "order",
+        "running",
+        "tests",
+        "committing",
+        "branch",
+        "human",
+        "review",
+        "requires",
+        "produced",
+        "feature"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:23.804Z"
+    },
+    {
+      "id": "prAuthor",
+      "harnessAgentId": "prAuthor",
+      "name": "Pull Request Authoring",
+      "summary": "AI agent that writes a pull request body for a committed AISDLC feature file and raises or updates that pull request in Harness Code, making no other repository writes; requires the branch and committed file produced by the Feature File Commit agent.",
+      "description": "AI agent that writes a pull request body for a committed AISDLC feature file and raises or updates that pull request in Harness Code, making no other repository writes; requires the branch and committed file produced by the Feature File Commit agent.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "mcp_connectors",
+        "repo_id",
+        "org_id",
+        "project_id",
+        "source_branch"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify the MCP connector refs to mount. Include a Harness MCP connector so the agent can read context and raise the pull request."
+        },
+        {
+          "key": "repo_id",
+          "label": "Repository ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.repo_id",
+          "note": "Enter the Harness Code repository identifier the pull request is raised in."
+        },
+        {
+          "key": "org_id",
+          "label": "Organization ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.org_id",
+          "note": "Enter the Harness organization identifier that scopes the repository."
+        },
+        {
+          "key": "project_id",
+          "label": "Project ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.project_id",
+          "note": "Enter the Harness project identifier that scopes the repository."
+        },
+        {
+          "key": "source_branch",
+          "label": "Source Branch",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.source_branch",
+          "note": "Enter the branch the pull request is opened from, typically the SOURCE_BRANCH output of the upstream Feature File Commit step."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Repository ID",
+        "Organization ID",
+        "Project ID",
+        "Source Branch"
+      ],
+      "keywords": [
+        "pull",
+        "request",
+        "authoring",
+        "writes",
+        "body",
+        "committed",
+        "aisdlc",
+        "feature",
+        "file",
+        "raises",
+        "updates",
+        "code",
+        "making",
+        "other",
+        "repository",
+        "requires",
+        "branch",
+        "produced",
+        "commit"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:22.756Z"
+    },
+    {
+      "id": "regressionFixer",
+      "harnessAgentId": "regressionFixer",
+      "name": "Regression Repair",
+      "summary": "AI agent that reads triaged regressions and fixes each one in the codebase as an independent, reviewable commit; requires the regressions report produced by the Test Failure Classification agent.",
+      "description": "AI agent that reads triaged regressions and fixes each one in the codebase as an independent, reviewable commit; requires the regressions report produced by the Test Failure Classification agent.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier used for regression repair."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "regression",
+        "repair",
+        "reads",
+        "triaged",
+        "regressions",
+        "fixes",
+        "independent",
+        "reviewable",
+        "commit",
+        "requires",
+        "report",
+        "produced",
+        "test",
+        "failure",
+        "classification"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:22.229Z"
+    },
+    {
+      "id": "specAuthor",
+      "harnessAgentId": "specAuthor",
+      "name": "Spec Authoring",
+      "summary": "AI agent that generates a product spec for each features file added or modified in the triggering pull request and commits it to the PR source branch.",
+      "description": "AI agent that generates a product spec for each features file added or modified in the triggering pull request and commits it to the PR source branch.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier or inference-profile ARN."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount for PR and repository operations."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)"
+      ],
+      "keywords": [
+        "spec",
+        "authoring",
+        "generates",
+        "product",
+        "features",
+        "file",
+        "added",
+        "modified",
+        "pull",
+        "request",
+        "commits",
+        "branch"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:21.407Z"
+    },
+    {
+      "id": "templateAuditor",
+      "harnessAgentId": "templateAuditor",
+      "name": "Template Audit",
+      "summary": "AI agent that audits Harness CI/CD templates across a project, analyzing usage, comparing versions, detecting consolidation and plugin opportunities, and reporting (and optionally cleaning up) duplicate or unused versions.",
+      "description": "AI agent that audits Harness CI/CD templates across a project, analyzing usage, comparing versions, detecting consolidation and plugin opportunities, and reporting (and optionally cleaning up) duplicate or unused versions.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "govern",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "platform"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "mcp_connectors",
+        "model_name",
+        "account_id",
+        "org_id",
+        "project_id",
+        "harness_base_url"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount for template audit operations."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the model identifier used for template intelligence analysis."
+        },
+        {
+          "key": "account_id",
+          "label": "Account ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.account_id",
+          "note": "Enter the Harness account identifier for template discovery scope."
+        },
+        {
+          "key": "org_id",
+          "label": "Org ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.org_id",
+          "note": "Enter the Harness organization identifier for template discovery scope."
+        },
+        {
+          "key": "project_id",
+          "label": "Project ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.project_id",
+          "note": "Enter the Harness project identifier for template discovery scope."
+        },
+        {
+          "key": "harness_base_url",
+          "label": "Harness Base URL",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.harness_base_url",
+          "note": "Enter the Harness base URL used by template audit operations."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "MCP Connectors (Mcp)",
+        "Model Name",
+        "Account ID",
+        "Org ID",
+        "Project ID",
+        "Harness Base URL"
+      ],
+      "keywords": [
+        "template",
+        "audit",
+        "audits",
+        "templates",
+        "across",
+        "project",
+        "analyzing",
+        "usage",
+        "comparing",
+        "versions",
+        "detecting",
+        "consolidation",
+        "plugin",
+        "opportunities",
+        "reporting",
+        "optionally",
+        "cleaning",
+        "duplicate",
+        "unused"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:24.235Z"
+    },
+    {
+      "id": "testDoctor",
+      "harnessAgentId": "testDoctor",
+      "name": "Test Doctor",
+      "summary": "AI agent that fixes flaky tests, speeds up slow tests, and optimizes fixtures without changing assertions or production code, then opens a draft pull request.",
+      "description": "AI agent that fixes flaky tests, speeds up slow tests, and optimizes fixtures without changing assertions or production code, then opens a draft pull request.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier used for test suite analysis."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify a list of MCP connector refs to mount. Include a Harness MCP connector so the agent can open the test-fix pull request."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "MCP Connectors (Mcp)"
+      ],
+      "keywords": [
+        "test",
+        "doctor",
+        "fixes",
+        "flaky",
+        "tests",
+        "speeds",
+        "slow",
+        "optimizes",
+        "fixtures",
+        "without",
+        "changing",
+        "assertions",
+        "production",
+        "code",
+        "draft",
+        "pull",
+        "request"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:27.687Z"
+    },
+    {
+      "id": "automationFailureClassifier",
+      "harnessAgentId": "automationFailureClassifier",
+      "name": "Test Failure Classification",
+      "summary": "AI agent that classifies end-to-end test failures as application regressions or outdated tests by cross-referencing failures against the changelog.",
+      "description": "AI agent that classifies end-to-end test failures as application regressions or outdated tests by cross-referencing failures against the changelog.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "test"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier used for failure classification."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name"
+      ],
+      "keywords": [
+        "test",
+        "failure",
+        "classification",
+        "classifies",
+        "end",
+        "failures",
+        "application",
+        "regressions",
+        "outdated",
+        "tests",
+        "cross",
+        "referencing",
+        "against",
+        "changelog"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:21.950Z"
+    },
+    {
+      "id": "verificationAnalyzer",
+      "harnessAgentId": "verificationAnalyzer",
+      "name": "Verification Analysis",
+      "summary": "AI agent that analyzes application source code and Kubernetes manifests to discover Prometheus metrics and log signals, emitting a grounded verification configuration for Continuous Verification.",
+      "description": "AI agent that analyzes application source code and Kubernetes manifests to discover Prometheus metrics and log signals, emitting a grounded verification configuration for Continuous Verification.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "release",
+        "monitor",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "cd"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "mcp_connectors"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify the MCP connector refs to mount. Include a Harness MCP connector so the agent can read pipelines and monitored services."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector"
+      ],
+      "keywords": [
+        "verification",
+        "analysis",
+        "analyzes",
+        "application",
+        "code",
+        "kubernetes",
+        "manifests",
+        "discover",
+        "prometheus",
+        "metrics",
+        "log",
+        "signals",
+        "emitting",
+        "grounded",
+        "configuration",
+        "continuous"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:26.649Z"
+    },
+    {
+      "id": "verificationEvaluator",
+      "harnessAgentId": "verificationEvaluator",
+      "name": "Verification Evaluation",
+      "summary": "AI agent that performs a read-only preview of Continuous Verification changes, reporting which monitored services and pipeline Verify steps would be created, updated, or left unchanged; requires the verify-config.json produced by the Verification Analysis agent.",
+      "description": "AI agent that performs a read-only preview of Continuous Verification changes, reporting which monitored services and pipeline Verify steps would be created, updated, or left unchanged; requires the verify-config.json produced by the Verification Analysis agent.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "release",
+        "monitor"
+      ],
+      "modules": [
+        "cd"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "mcp_connectors",
+        "target_pipeline_id",
+        "namespace",
+        "account_id",
+        "org_id",
+        "project_id",
+        "env_id",
+        "prometheus_connector_ref",
+        "elasticsearch_connector_ref",
+        "base_url"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify the MCP connector refs to mount. Include a Harness MCP connector so the agent can read pipelines and monitored services."
+        },
+        {
+          "key": "target_pipeline_id",
+          "label": "Target Pipeline ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.target_pipeline_id",
+          "note": "Enter the identifier of the deploy pipeline the agent inspects for Canary Verify steps."
+        },
+        {
+          "key": "namespace",
+          "label": "Namespace",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.namespace",
+          "note": "Enter the Kubernetes namespace used to resolve namespace placeholders in the generated PromQL queries."
+        },
+        {
+          "key": "account_id",
+          "label": "Account ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.account_id",
+          "note": "Enter the Harness account identifier used for Continuous Verification REST calls."
+        },
+        {
+          "key": "org_id",
+          "label": "Organization ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.org_id",
+          "note": "Enter the Harness organization identifier that scopes the pipeline and monitored services."
+        },
+        {
+          "key": "project_id",
+          "label": "Project ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.project_id",
+          "note": "Enter the Harness project identifier that scopes the pipeline and monitored services."
+        },
+        {
+          "key": "env_id",
+          "label": "Environment ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.env_id",
+          "note": "Enter the Harness environment identifier used to build monitored service identifiers."
+        },
+        {
+          "key": "prometheus_connector_ref",
+          "label": "Prometheus Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.prometheus_connector_ref",
+          "note": "Select the Prometheus connector used as the metrics health source when building the desired-state payload."
+        },
+        {
+          "key": "elasticsearch_connector_ref",
+          "label": "Elasticsearch Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.elasticsearch_connector_ref",
+          "note": "Select the Elasticsearch connector used as the logs health source when building the desired-state payload."
+        },
+        {
+          "key": "base_url",
+          "label": "Harness Base URL",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.base_url",
+          "note": "Enter the Harness base URL used for Continuous Verification REST API calls."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Target Pipeline ID",
+        "Namespace",
+        "Account ID",
+        "Organization ID",
+        "Project ID",
+        "Environment ID",
+        "Prometheus Connector",
+        "Elasticsearch Connector",
+        "Harness Base URL"
+      ],
+      "keywords": [
+        "verification",
+        "evaluation",
+        "performs",
+        "read",
+        "only",
+        "preview",
+        "continuous",
+        "reporting",
+        "which",
+        "monitored",
+        "services",
+        "verify",
+        "steps",
+        "would",
+        "created",
+        "updated",
+        "left",
+        "unchanged",
+        "requires",
+        "config"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:26.111Z"
+    },
+    {
+      "id": "verificationImplementer",
+      "harnessAgentId": "verificationImplementer",
+      "name": "Verification Implementation",
+      "summary": "AI agent that creates Harness Continuous Verification monitored services and injects Verify steps into the target deploy pipeline; requires the verify-config.json produced by the Verification Analysis agent.",
+      "description": "AI agent that creates Harness Continuous Verification monitored services and injects Verify steps into the target deploy pipeline; requires the verify-config.json produced by the Verification Analysis agent.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "release",
+        "monitor",
+        "build"
+      ],
+      "modules": [
+        "cd"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "mcp_connectors",
+        "target_pipeline_id",
+        "namespace",
+        "account_id",
+        "org_id",
+        "project_id",
+        "env_id",
+        "prometheus_connector_ref",
+        "elasticsearch_connector_ref",
+        "base_url"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Specify the MCP connector refs to mount. Include a Harness MCP connector so the agent can read pipelines and monitored services."
+        },
+        {
+          "key": "target_pipeline_id",
+          "label": "Target Pipeline ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.target_pipeline_id",
+          "note": "Enter the identifier of the deploy pipeline the agent injects Canary Verify steps into."
+        },
+        {
+          "key": "namespace",
+          "label": "Namespace",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.namespace",
+          "note": "Enter the Kubernetes namespace used to resolve namespace placeholders in the generated PromQL queries."
+        },
+        {
+          "key": "account_id",
+          "label": "Account ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.account_id",
+          "note": "Enter the Harness account identifier used for Continuous Verification REST calls."
+        },
+        {
+          "key": "org_id",
+          "label": "Organization ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.org_id",
+          "note": "Enter the Harness organization identifier that scopes the pipeline and monitored services."
+        },
+        {
+          "key": "project_id",
+          "label": "Project ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.project_id",
+          "note": "Enter the Harness project identifier that scopes the pipeline and monitored services."
+        },
+        {
+          "key": "env_id",
+          "label": "Environment ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.env_id",
+          "note": "Enter the Harness environment identifier used to build monitored service identifiers."
+        },
+        {
+          "key": "prometheus_connector_ref",
+          "label": "Prometheus Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.prometheus_connector_ref",
+          "note": "Select the Prometheus connector used as the metrics health source."
+        },
+        {
+          "key": "elasticsearch_connector_ref",
+          "label": "Elasticsearch Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.elasticsearch_connector_ref",
+          "note": "Select the Elasticsearch connector used as the logs health source."
+        },
+        {
+          "key": "base_url",
+          "label": "Harness Base URL",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.base_url",
+          "note": "Enter the Harness base URL used for Continuous Verification REST API calls."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Target Pipeline ID",
+        "Namespace",
+        "Account ID",
+        "Organization ID",
+        "Project ID",
+        "Environment ID",
+        "Prometheus Connector",
+        "Elasticsearch Connector",
+        "Harness Base URL"
+      ],
+      "keywords": [
+        "verification",
+        "implementation",
+        "creates",
+        "continuous",
+        "monitored",
+        "services",
+        "injects",
+        "verify",
+        "steps",
+        "target",
+        "deploy",
+        "requires",
+        "config",
+        "json",
+        "produced",
+        "analysis"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:25.378Z"
+    },
+    {
+      "id": "avra",
+      "harnessAgentId": "avra",
+      "name": "Vulnerability Remediation",
+      "summary": "AI agent that closes the gap between vulnerability detection and verified remediation by opening confidence-scored fix pull requests and filing auditable exemptions for unfixable findings.",
+      "description": "AI agent that closes the gap between vulnerability detection and verified remediation by opening confidence-scored fix pull requests and filing auditable exemptions for unfixable findings.",
+      "ownership": "harness_managed",
+      "linkType": "system",
+      "lifecycle": [
+        "secure",
+        "govern",
+        "build"
+      ],
+      "modules": [
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request",
+        "scan_finding"
+      ],
+      "scope": "project",
+      "version": "1.0.0",
+      "availability": "available",
+      "inputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors",
+        "validation_pipeline_id",
+        "harness_base_url",
+        "harness_token_secret"
+      ],
+      "configuration": [
+        {
+          "key": "llm_connector",
+          "label": "LLM Connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llm_connector",
+          "note": "Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock)."
+        },
+        {
+          "key": "model_name",
+          "label": "Model Name",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.model_name",
+          "note": "Enter the Anthropic / Bedrock model identifier used for vulnerability remediation."
+        },
+        {
+          "key": "mcp_connectors",
+          "label": "MCP Connectors (Mcp)",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcp_connectors",
+          "note": "Optionally specify a list of MCP connector refs to mount. Include a Harness MCP connector to look up the validation pipeline execution; if none is provided, the agent falls back to the Harness API."
+        },
+        {
+          "key": "validation_pipeline_id",
+          "label": "Validation Pipeline ID",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.validation_pipeline_id",
+          "note": "Enter the identifier of the pipeline that re-scans fix pull requests to confirm the vulnerability is resolved."
+        },
+        {
+          "key": "harness_base_url",
+          "label": "Harness Base URL",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.harness_base_url",
+          "note": "Enter the Harness base URL used by the remediation API operations."
+        },
+        {
+          "key": "harness_token_secret",
+          "label": "Harness Token Secret",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_token_secret",
+          "note": "Select the Harness secret that stores the API key for remediation operations."
+        }
+      ],
+      "prerequisites": [
+        "LLM Connector",
+        "Model Name",
+        "Validation Pipeline ID",
+        "Harness Base URL",
+        "Harness Token Secret"
+      ],
+      "keywords": [
+        "vulnerability",
+        "remediation",
+        "closes",
+        "gap",
+        "between",
+        "detection",
+        "verified",
+        "opening",
+        "confidence",
+        "scored",
+        "fix",
+        "pull",
+        "requests",
+        "filing",
+        "auditable",
+        "exemptions",
+        "unfixable",
+        "findings"
+      ],
+      "iconName": "harness",
+      "source": "harness_global_template",
+      "syncedAt": "2026-08-23T02:37:28.199Z"
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+pipeline:
+  name: Kubernetes Manifest Remediation Sample
+  identifier: manifestRemediatorAgentSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Kubernetes Manifest Remediation
+        identifier: Run_manifestRemediatorAgent
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Kubernetes Manifest Remediation
+                  identifier: manifestRemediatorAgent
+                  spec:
+                    agentName: manifestRemediatorAgent
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>

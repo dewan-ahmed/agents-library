@@ -1,0 +1,36 @@
+pipeline:
+  name: Template Audit Sample
+  identifier: templateAuditorSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Template Audit
+        identifier: Run_templateAuditor
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Template Audit
+                  identifier: templateAuditor
+                  spec:
+                    agentName: templateAuditor
+                    agentSettings:
+                      llm_connector: <+input>
+                      mcp_connectors: <+input>
+                      model_name: <+input>.default(global.anthropic.claude-sonnet-4-6)
+                      account_id: <+account.identifier>
+                      org_id: <+org.identifier>
+                      project_id: <+project.identifier>
+                      harness_base_url: <+input>.default(https://app.harness.io)

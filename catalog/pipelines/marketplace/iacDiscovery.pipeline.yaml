@@ -1,0 +1,32 @@
+pipeline:
+  name: IaC Discovery Sample
+  identifier: iacDiscoverySample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run IaC Discovery
+        identifier: Run_iacDiscovery
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: IaC Discovery
+                  identifier: iacDiscovery
+                  spec:
+                    agentName: iacDiscovery
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>.default(global.anthropic.claude-opus-4-6-v1)
+                      mcp_connectors: <+input>

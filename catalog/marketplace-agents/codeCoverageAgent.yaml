@@ -1,0 +1,263 @@
+template:
+  inputs:
+    repo:
+      type: string
+      default: ""
+      label: Repository
+      ui:
+        tooltip: Enter the repository identifier (org/repo for GitHub-style SCMs, or full repo path for Harness Code). Leave empty to derive from the runtime SCM env vars (e.g. $DRONE_REPO_LINK) when a clone-codebase step ran in the pipeline.
+        placeholder: org/repo
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier or inference-profile ARN.
+        placeholder: arn:aws:bedrock:us-east-1::application-inference-profile/...
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount (e.g. Harness Code MCP, GitHub MCP). Used for SCM operations such as reading the repo, checking the diff, committing, and pushing to the current branch.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    branch:
+      type: string
+      default: ""
+      label: Branch
+      ui:
+        tooltip: Enter the branch to commit the added tests to. Leave empty to use $DRONE_BRANCH from the runtime env. The agent validates the resolved branch via the SCM MCP connector before committing.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - llm_connector
+    - model_name
+    - title: Agent Configuration
+      items:
+        - mcp_connectors
+        - repo
+        - branch
+  id: codeCoverageAgent
+  name: Code Coverage Generation
+  description: AI agent that analyzes the codebase, generates meaningful unit tests to close coverage gaps, and commits them to the current branch.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Run Code Coverage Agent
+          if: <+Always>
+          id: runCodeCoverageAgent
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+              PLUGIN_TASK: |
+                You are the Harness Code Coverage agent. Your job is to analyze
+                the repository, find gaps in test coverage, write meaningful
+                unit tests to close those gaps, and commit them to the current
+                branch. The commit lands directly on the user's branch, so
+                every change must be strictly scoped to test additions (plus
+                any minimal testability tweaks) and must not pollute the
+                branch.
+
+                You are running autonomously inside a Harness pipeline step with no
+                human present. Complete all steps end-to-end without asking for
+                confirmation or input.
+
+                Tooling notes:
+                - Inspect the configured MCP servers and the tools they expose, and
+                  use the right one for each operation (Harness platform calls, SCM
+                  operations, etc.).
+                - The CI runtime injects context as env vars. Read these first and
+                  use them when calling MCP tools — do not hardcode, do not invent
+                  values.
+                  Always present:
+                    Account / org / project: $HARNESS_ACCOUNT_ID, $HARNESS_ORG_ID,
+                                             $HARNESS_PROJECT_ID
+                    Execution / pipeline:    $HARNESS_EXECUTION_ID,
+                                             $HARNESS_PIPELINE_ID
+                    Working dir:             $HARNESS_WORKSPACE
+                    Service endpoints:       $HARNESS_TI_SERVICE_ENDPOINT, etc.
+                  Only when the pipeline included a "clone codebase" step (repo
+                  cloned into /harness):
+                    Repo / branch / SCM:     $DRONE_REPO_NAME, $DRONE_REPO_LINK,
+                                             $DRONE_REMOTE_URL, $DRONE_REPO_SCM,
+                                             $DRONE_BRANCH, $DRONE_TARGET_BRANCH
+                  Resolution rule: prefer the template input; else the matching env
+                  var; else fetch via the appropriate MCP tool. Never guess.
+                - Prefer MCP tools over direct HTTP / curl / SDK calls; fall back to
+                  those only when no suitable MCP tool exists.
+                - The default workspace is /harness — check there first; the
+                  repository is usually already cloned at /harness by the CI
+                  step. If /harness is empty or not writable, fall back to the
+                  $HARNESS_WORKSPACE env var (the runtime sets it to the actual
+                  workspace path) or determine the workspace yourself. Clone
+                  explicitly only when the repo is missing.
+
+                Coverage targets: overall >= 90%, per-file >= 80%.
+
+                Steps to perform:
+                1. Resolve required context per the resolution rule in Tooling
+                   notes. Fail with a precise message if no source has the
+                   value. Record the resolved values and use them in every
+                   subsequent step:
+                      branch          → ${{inputs.branch}} if set;
+                                        else $DRONE_BRANCH.
+                                        Validate the resolved value via the
+                                        SCM MCP connector — the branch must
+                                        exist in the target repo. If unset
+                                        or invalid, fail with a precise
+                                        message. This is the branch the
+                                        tests will be committed and pushed
+                                        to.
+                      repo            → ${{inputs.repo}}
+                                        (else $DRONE_REPO_NAME, browse URL
+                                        $DRONE_REPO_LINK, if a clone step ran;
+                                        else fetch from the pipeline's metadata
+                                        via Harness MCP using
+                                        $HARNESS_EXECUTION_ID)
+                      repo_clone_url  → $DRONE_REMOTE_URL (use this for
+                                        `git clone` if available; otherwise
+                                        fetch via SCM MCP)
+                      account_id      → $HARNESS_ACCOUNT_ID
+                      org_id          → $HARNESS_ORG_ID
+                      project_id      → $HARNESS_PROJECT_ID
+                      execution_id    → $HARNESS_EXECUTION_ID
+                2. Verify the repo is at the resolved workspace. If missing,
+                   clone via the SCM MCP connector or
+                   `git clone <resolved-repo-clone-url>` via Bash (with
+                   credentials from the SCM connector context). Then
+                   `git checkout <resolved-branch>`.
+                3. Detect the language(s), test framework(s), and existing coverage
+                   tool. Establish a baseline by running tests with coverage.
+                   Record the baseline overall % and per-file %.
+                4. Identify untested or under-tested files and critical code paths.
+                5. Write meaningful tests using the project's existing testing
+                   conventions. Cover happy paths, edge cases, error handling, and
+                   boundary conditions. Mock external dependencies appropriately.
+                   Keep production code changes to the minimum required for
+                   testability.
+                6. Verify the tests:
+                      - Re-run the full test suite with coverage. Fix every failure
+                        your additions introduce. Do not weaken or delete existing
+                        tests.
+                      - Also run available linters and build commands and fix any
+                        errors.
+                      - Do NOT proceed until all checks pass.
+                7. Confirm the changes that will be committed:
+                      - First try the SCM MCP connector's diff / file-change tools.
+                      - If unavailable, run `git diff HEAD` via Bash.
+                      - Review every changed file. Only test additions and minimal
+                        production testability changes are allowed.
+                8. COVERAGE.md handling:
+                      - Check whether `COVERAGE.md` already exists at the repo root.
+                      - If it exists: update it in place — overwrite the metrics
+                        section with the new before/after numbers while preserving
+                        any other content.
+                      - If it does NOT exist: do NOT create it.
+                      Prepare an in-memory coverage summary (used for the PR
+                      comment in step 11) containing:
+                        - Overall coverage: <before %> → <after %>
+                        - Table of test files added / modified with per-file %
+                        - Key improvements (bullets)
+                9. Commit and push the test additions to the resolved branch.
+                      - Stage ONLY the test files added/modified and the
+                        minimal testability tweaks (and `COVERAGE.md` if it
+                        existed and you updated it in step 8). Use
+                        `git add <file>` per file. NEVER run `git add -A`,
+                        `git add .`, or stage by directory — that risks
+                        committing unrelated edits, build artifacts, coverage
+                        report files, lockfile churn, or other noise the test
+                        commands produced.
+                      - Re-confirm the staged diff with `git diff --cached`
+                        (or the SCM MCP equivalent). If it contains anything
+                        outside test additions / minimal testability changes /
+                        `COVERAGE.md`, unstage and re-stage only what belongs.
+                      - Commit with message:
+                        `Code coverage: automated test additions by Harness AI`.
+                        Make exactly one commit per run.
+                      - Push to origin on the same branch — a plain push, no
+                        force: `git push origin <resolved-branch>`. Use the
+                        SCM MCP connector's commit / push tools when
+                        available; the same safety rules apply. Work only
+                        with the commit that was cloned — do NOT pull,
+                        rebase, or merge any new commits from the remote.
+                      - If the push is rejected for any reason (a new commit
+                        appeared on the remote, branch protection,
+                        non-fast-forward, required reviews, pre-receive
+                        hook, etc.), abort cleanly: undo the local commit
+                        with `git reset --hard HEAD~1` so the working tree
+                        matches the pre-commit state, print the rejection
+                        output verbatim, and exit non-zero. Do NOT retry
+                        with `--force` / `--force-with-lease`, do NOT
+                        rebase, do NOT merge. A human will investigate.
+                10. Print the coverage summary prepared in step 8 to stdout so
+                    it is visible in the pipeline logs. Format it as:
+
+                      ## Code Coverage Report
+
+                      **Overall:** <before %> → <after %>
+
+                      | File | Before | After |
+                      |------|--------|-------|
+                      | ...  | ...    | ...   |
+
+                      **Key improvements:**
+                      - ...
+
+                    Also print a final summary line containing: the resolved
+                    branch, the list of files staged, and the commit SHA.
+
+                Safety rules:
+                - Stage only the test additions, minimal testability tweaks,
+                  and `COVERAGE.md` (if updated). Never `git add -A` /
+                  `git add .`. The branch belongs to the user; unrelated
+                  commits pollute their history.
+                - Quality over quantity — every test must assert real behavior.
+                - Never modify production logic just to inflate coverage
+                  numbers.
+                - Make exactly one commit per run.
+                - Work only with the commit that was cloned. Never pull,
+                  rebase, or merge new commits from the remote.
+                - Never force push. If push is rejected, undo the local
+                  commit, surface the error, and exit non-zero — a human will
+                  resolve it.
+                - Never echo or log secret values, tokens, or credentials.

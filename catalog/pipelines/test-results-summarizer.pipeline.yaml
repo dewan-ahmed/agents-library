@@ -1,0 +1,100 @@
+pipeline:
+  name: Test Results Summarizer
+  identifier: testResultsSummarizer
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  variables:
+    - name: llmConnector
+      type: String
+      description: Connector id for your LLM provider, for example account.myAnthropicConnector.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier your LLM connector exposes.
+      required: true
+      value: <+input>
+    - name: repoName
+      type: String
+      description: Repository name reported in the summary.
+      required: true
+      value: <+input>
+    - name: testCommand
+      type: String
+      description: Command that runs your tests and writes output to the log path.
+      required: true
+      value: <+input>.default(go test -v ./... -coverprofile=cover.out)
+  stages:
+    - stage:
+        name: build
+        identifier: build
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+            override: true
+          buildIntelligence:
+            enabled: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Run Tests
+                  identifier: Run_Tests
+                  spec:
+                    shell: Sh
+                    command: |-
+                      set +e
+                      <+pipeline.variables.testCommand> > /harness/test-output.log 2>&1
+                      TEST_EXIT=$?
+                      cat /harness/test-output.log
+                      printf 'TEST_EXIT=%s\n' "$TEST_EXIT" >> "$HARNESS_OUTPUT"
+                    outputVariables:
+                      - name: TEST_EXIT
+                        type: String
+                        value: TEST_EXIT
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore
+              - step:
+                  type: Agent
+                  name: Test Result Summarize
+                  identifier: Test_Result_Summarize
+                  spec:
+                    agentName: ca_testresultssummarizer
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+                      branch: <+codebase.branch>
+                      commit_sha: <+codebase.commitSha>
+                      pipeline_url: <+pipeline.executionUrl>
+                      repo_name: <+pipeline.variables.repoName>
+                      test_exit_code: <+steps.Run_Tests.output.outputVariables.TEST_EXIT>
+                      test_output_path: /harness/test-output.log
+                    inputs:
+                      test_output_path: /harness/test-output.log
+                      test_exit_code: <+steps.Run_Tests.output.outputVariables.TEST_EXIT>
+                      pipeline_url: <+pipeline.executionUrl>
+                      branch: <+codebase.branch>
+                      commit_sha: <+codebase.commitSha>
+                      pr_number: <+codebase.prNumber>
+                      repo_name: <+pipeline.variables.repoName>
+                    envVariables:
+                      # Only needed if the agent posts a PR comment. Replace with your own secret id.
+                      HARNESS_TOKEN: <+secrets.getValue("YOUR_SCM_TOKEN_SECRET")>

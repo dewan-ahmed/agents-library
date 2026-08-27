@@ -1,0 +1,35 @@
+pipeline:
+  name: Mythos Readiness Collection Sample
+  identifier: mythosReadinessCollectorSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Mythos Readiness Collection
+        identifier: Run_mythosReadinessCollector
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Mythos Readiness Collection
+                  identifier: mythosReadinessCollector
+                  spec:
+                    agentName: mythosReadinessCollector
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>
+                      mcp_connectors: <+input>
+                      account_id: <+account.identifier>
+                      org_id: <+org.identifier>
+                      project_id: <+project.identifier>

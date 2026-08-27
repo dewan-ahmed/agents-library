@@ -1,0 +1,88 @@
+pipeline:
+  name: Dockerfile Cache Optimizer Pipeline
+  identifier: dockerfileCacheOptimizerPipeline
+  projectIdentifier: dewanahmed
+  orgIdentifier: SANDBOX
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: podinfo
+        build: <+input>
+  stages:
+    - stage:
+        name: Optimize Dockerfiles
+        identifier: Optimize_Dockerfiles
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+            override: true
+          buildIntelligence:
+            enabled: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Dockerfile Cache Optimizer
+                  identifier: Dockerfile_Cache_Optimizer
+                  spec:
+                    agentName: ca_dockerfilecacheoptimizernomcp
+                    agentSettings:
+                      llmConnector: account.harnessAnthropic
+                      modelName: claude-sonnet-4-6
+              - step:
+                  type: Run
+                  name: Commit and Open PR
+                  identifier: Commit_And_Open_PR
+                  spec:
+                    shell: Sh
+                    command: |
+                      set -e
+                      cd /harness
+
+                      git config user.email "docs-agent@harness.io"
+                      git config user.name  "Dockerfile Cache Agent"
+
+                      # Stage Dockerfile and .dockerignore changes anywhere in the tree
+                      git add -A -- '*Dockerfile*' '*.dockerignore' '.dockerignore'
+
+                      if git diff --cached --quiet; then
+                        echo "No Dockerfile or .dockerignore changes to commit."
+                        exit 0
+                      fi
+
+                      BRANCH="dockerfile-cache/agent-<+pipeline.sequenceId>"
+                      git checkout -b "$BRANCH"
+
+                      git commit -m "Optimize Dockerfile(s) for BuildKit layer caching
+
+                      Automated changes by the Dockerfile Cache Optimizer agent.
+
+                      Pipeline: <+pipeline.executionUrl>"
+
+                      git push origin "$BRANCH"
+
+                      echo ""
+                      echo "Branch pushed: $BRANCH"
+                      echo "Open a PR at:"
+                      echo "  https://app.harness.io/ng/account/<+account.identifier>/module/code/orgs/<+project.orgIdentifier>/projects/<+project.identifier>/repos/podinfo/pulls/compare/master...$BRANCH"
+
+                      if [ -f /harness/agent-summary.md ]; then
+                        echo ""
+                        echo "=== Agent summary ==="
+                        cat /harness/agent-summary.md
+                      fi
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore

@@ -1,0 +1,108 @@
+pipeline:
+  name: Dockerfile Cache Optimizer
+  identifier: dockerfileCacheOptimizer
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  variables:
+    - name: llmConnector
+      type: String
+      description: Connector id for your LLM provider, for example account.myAnthropicConnector.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier your LLM connector exposes.
+      required: true
+      value: <+input>
+    - name: gitUserEmail
+      type: String
+      description: Email used for the automated commit.
+      required: true
+      value: <+input>.default(ci-bot@example.com)
+    - name: gitUserName
+      type: String
+      description: Author name used for the automated commit.
+      required: true
+      value: <+input>.default(Dockerfile Cache Agent)
+  stages:
+    - stage:
+        name: Optimize Dockerfiles
+        identifier: Optimize_Dockerfiles
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: false
+            override: true
+          buildIntelligence:
+            enabled: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Dockerfile Cache Optimizer
+                  identifier: Dockerfile_Cache_Optimizer
+                  spec:
+                    agentName: ca_dockerfilecacheoptimizernomcp
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+              - step:
+                  type: Run
+                  name: Commit and Push Branch
+                  identifier: Commit_And_Push_Branch
+                  spec:
+                    shell: Sh
+                    command: |
+                      set -e
+                      cd /harness
+
+                      git config user.email "<+pipeline.variables.gitUserEmail>"
+                      git config user.name  "<+pipeline.variables.gitUserName>"
+
+                      # Stage Dockerfile and .dockerignore changes anywhere in the tree
+                      git add -A -- '*Dockerfile*' '*.dockerignore' '.dockerignore'
+
+                      if git diff --cached --quiet; then
+                        echo "No Dockerfile or .dockerignore changes to commit."
+                        exit 0
+                      fi
+
+                      BRANCH="dockerfile-cache/agent-<+pipeline.sequenceId>"
+                      git checkout -b "$BRANCH"
+
+                      git commit -m "Optimize Dockerfile(s) for BuildKit layer caching
+
+                      Automated changes by the Dockerfile Cache Optimizer agent.
+
+                      Pipeline: <+pipeline.executionUrl>"
+
+                      git push origin "$BRANCH"
+
+                      echo ""
+                      echo "Branch pushed: $BRANCH"
+                      echo "Open a pull request from this branch against your default branch."
+
+                      if [ -f /harness/agent-summary.md ]; then
+                        echo ""
+                        echo "=== Agent summary (use as the PR description) ==="
+                        cat /harness/agent-summary.md
+                      fi
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: Ignore

@@ -1,0 +1,31 @@
+pipeline:
+  name: Outdated Test Update Sample
+  identifier: outdatedTestUpdaterSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Outdated Test Update
+        identifier: Run_outdatedTestUpdater
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Outdated Test Update
+                  identifier: outdatedTestUpdater
+                  spec:
+                    agentName: outdatedTestUpdater
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>.default(claude-sonnet-4-6)

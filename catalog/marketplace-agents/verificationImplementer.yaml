@@ -1,0 +1,572 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      default:
+        - harness_mcp
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify the MCP connector refs to mount. Include a Harness MCP connector so the agent can read pipelines and monitored services.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    target_pipeline_id:
+      type: string
+      label: Target Pipeline ID
+      required: true
+      ui:
+        tooltip: Enter the identifier of the deploy pipeline the agent injects Canary Verify steps into.
+        placeholder: my_deploy_pipeline
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    namespace:
+      type: string
+      label: Namespace
+      required: true
+      ui:
+        tooltip: Enter the Kubernetes namespace used to resolve namespace placeholders in the generated PromQL queries.
+        placeholder: my-namespace
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    account_id:
+      type: string
+      label: Account ID
+      required: true
+      ui:
+        tooltip: Enter the Harness account identifier used for Continuous Verification REST calls.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    org_id:
+      type: string
+      label: Organization ID
+      required: true
+      ui:
+        tooltip: Enter the Harness organization identifier that scopes the pipeline and monitored services.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    project_id:
+      type: string
+      label: Project ID
+      required: true
+      ui:
+        tooltip: Enter the Harness project identifier that scopes the pipeline and monitored services.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    env_id:
+      type: string
+      label: Environment ID
+      required: true
+      ui:
+        tooltip: Enter the Harness environment identifier used to build monitored service identifiers.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    prometheus_connector_ref:
+      type: connector
+      label: Prometheus Connector
+      required: true
+      ui:
+        tooltip: Select the Prometheus connector used as the metrics health source.
+        placeholder: Select Prometheus Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    elasticsearch_connector_ref:
+      type: connector
+      label: Elasticsearch Connector
+      required: true
+      ui:
+        tooltip: Select the Elasticsearch connector used as the logs health source.
+        placeholder: Select Elasticsearch Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    base_url:
+      type: string
+      label: Harness Base URL
+      required: true
+      default: https://app.harness.io
+      ui:
+        tooltip: Enter the Harness base URL used for Continuous Verification REST API calls.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - mcp_connectors
+    - title: Verification Scope
+      items:
+        - target_pipeline_id
+        - namespace
+    - title: Harness Scope
+      items:
+        - account_id
+        - org_id
+        - project_id
+        - env_id
+        - prometheus_connector_ref
+        - elasticsearch_connector_ref
+        - base_url
+  id: verificationImplementer
+  name: Verification Implementation
+  description: AI agent that creates Harness Continuous Verification monitored services and injects Verify steps into the target deploy pipeline; requires the verify-config.json produced by the Verification Analysis agent.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Implement Verification
+          if: <+Always>
+          id: implementVerification
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_TASK: |
+                You are an infrastructure configuration agent. Your job is to read a verification
+                configuration file and create Harness Verify monitored services that implement the
+                described observability signals.
+
+                ## Input
+
+                Read the file `verify-config.json` from the working directory. This file was produced
+                by the Analyze Agent and contains a list of services with their Prometheus metrics
+                and Elasticsearch log queries.
+
+                ## Bootstrap (do this FIRST, before anything else)
+
+                Agent settings are provided as environment variables on this step. Read them directly —
+                do NOT fetch a pipeline or parse an `agentSettings` block to discover them:
+
+                  TARGET_PIPELINE_ID        — pipeline identifier to inject Verify steps into
+                  HARNESS_ACCOUNT_ID        — Harness account identifier
+                  HARNESS_ORG_ID            — organization identifier
+                  HARNESS_PROJECT_ID        — project identifier
+                  HARNESS_ENV_ID            — environment identifier for monitored services
+                  PROMETHEUS_CONNECTOR_REF  — connector identifier for Prometheus
+                  ELASTICSEARCH_CONNECTOR_REF — connector identifier for Elasticsearch
+                  NAMESPACE                 — Kubernetes namespace for PromQL query interpolation
+                  HARNESS_BASE_URL          — Harness API base URL, e.g. https://app.harness.io
+
+                Extract the API key for REST calls (do this ONCE, store in a variable, reuse everywhere):
+                  ```bash
+                  HARNESS_API_KEY=$(echo "$PLUGIN_MCP_SERVERS" | python3 -c "import json,sys; servers=json.loads(sys.stdin.read()); print(next(iter(servers.values()))['headerValue'])")
+                  ```
+                  Then reuse `$HARNESS_API_KEY` in all subsequent curl commands — do NOT re-extract it every time.
+
+                ### API Authentication
+
+                The Harness MCP server connector has full read/write permissions via its configured PAT.
+                **Prefer MCP for all operations** (reads and writes).
+
+                For REST API fallback (when MCP doesn't support a resource type like `monitored_service`):
+                use the `HARNESS_API_KEY` extracted during bootstrap above.
+
+                Use it in curl: `curl -H "x-api-key: $HARNESS_API_KEY" -H "Harness-Account: $HARNESS_ACCOUNT_ID" ...`
+
+                The base URL for REST API calls comes from `HARNESS_BASE_URL`. Do NOT hardcode
+                `app.harness.io` — use the value from the environment variable.
+
+                ### What MCP can and cannot do
+
+                MCP supports: `pipeline`, `service`, `environment`, `connector`, `secret`, `infrastructure`,
+                and many other resource types. Use `harness_describe(search_term="...")` to check.
+
+                MCP does **NOT** support: `monitored_service` (CV API). For monitored service CRUD, you
+                must use direct REST API calls to `$HARNESS_BASE_URL/gateway/cv/api/monitored-service`.
+
+                ## Task
+
+                For each service in verify-config.json:
+
+                ### Step 1: Resolve placeholder values
+
+                Replace `${namespace}` in all PromQL queries with the actual NAMESPACE value.
+
+                ### Step 2: Check if monitored service exists and compare
+
+                ```
+                GET /cv/api/monitored-service/{serviceIdentifier}_{envIdentifier}
+                  ?accountId={HARNESS_ACCOUNT_ID}
+                  &orgIdentifier={HARNESS_ORG_ID}
+                  &projectIdentifier={HARNESS_PROJECT_ID}
+                ```
+
+                The monitored service identifier convention is: `{serviceRef}_{environmentRef}`
+
+                If the monitored service already exists, compare its current health sources against what the
+                config specifies. Only update if there are actual differences (new metrics, changed queries,
+                added/removed health sources). If the existing configuration already matches, skip the update
+                and report action as "unchanged".
+
+                ### Step 3: Build the monitored service payload
+
+                Construct a JSON payload following this schema:
+
+                ```json
+                {
+                  "orgIdentifier": "{HARNESS_ORG_ID}",
+                  "projectIdentifier": "{HARNESS_PROJECT_ID}",
+                  "identifier": "{service_name}_{HARNESS_ENV_ID}",
+                  "name": "{service_name}_{HARNESS_ENV_ID}",
+                  "type": "Application",
+                  "description": "",
+                  "serviceRef": "{service_name}",
+                  "environmentRef": "{HARNESS_ENV_ID}",
+                  "environmentRefList": ["{HARNESS_ENV_ID}"],
+                  "tags": {},
+                  "sources": {
+                    "healthSources": [],
+                    "changeSources": []
+                  },
+                  "dependencies": [],
+                  "notificationRuleRefs": [],
+                  "enabled": false
+                }
+                ```
+
+                ### Step 4: Add Prometheus health source
+
+                For the metrics array in the config, build a Prometheus health source:
+
+                ```json
+                {
+                  "name": "prometheus",
+                  "identifier": "prometheus",
+                  "type": "Prometheus",
+                  "spec": {
+                    "connectorRef": "{PROMETHEUS_CONNECTOR_REF}",
+                    "metricPacks": [],
+                    "metricDefinitions": []
+                  }
+                }
+                ```
+
+                For each metric in the service's metrics array, add a metricDefinition:
+
+                ```json
+                {
+                  "identifier": "{metric.identifier}",
+                  "metricName": "{metric.metricName}",
+                  "prometheusMetric": "{metric.prometheusMetric}",
+                  "riskProfile": {
+                    "category": "{metric.category}",
+                    "metricType": "{metric.metricType}",
+                    "riskCategory": "<see riskCategory mapping below>",
+                    "thresholdTypes": ["{metric.thresholdType}"]
+                  },
+                  "analysis": {
+                    "deploymentVerification": {
+                      "enabled": true,
+                      "serviceInstanceFieldName": "{metric.serviceInstanceFieldName}"
+                    },
+                    "liveMonitoring": {
+                      "enabled": false
+                    },
+                    "riskProfile": {
+                      "category": "{metric.category}",
+                      "metricType": "{metric.metricType}",
+                      "riskCategory": "<see riskCategory mapping below>",
+                      "thresholdTypes": ["{metric.thresholdType}"]
+                    }
+                  },
+                  "sli": {
+                    "enabled": false
+                  },
+                  "query": "{metric.query}",
+                  "groupName": "{metric.groupName}",
+                  "serviceInstanceFieldName": "{metric.serviceInstanceFieldName}",
+                  "prometheusMetric": "{metric.prometheusMetric}",
+                  "serviceFilter": "{metric.serviceFilter}",
+                  "envFilter": "{metric.envFilter}",
+                  "aggregation": "{metric.aggregation}",
+                  "isManualQuery": "{metric.isManualQuery}"
+                }
+                ```
+
+                **riskCategory mapping** — the API requires specific compound enum values, NOT the same
+                as `category`. Map as follows:
+                - category=`Performance` + metricType=`RESP_TIME` → riskCategory=`Performance_ResponseTime`
+                - category=`Performance` + metricType=`THROUGHPUT` → riskCategory=`Performance_Throughput`
+                - category=`Performance` + any other metricType → riskCategory=`Performance_Other`
+                - category=`Errors` → riskCategory=`Errors`
+                - category=`Infrastructure` → riskCategory=`Infrastructure`
+
+                Do NOT set riskCategory to the raw category value — the API will reject it.
+
+                Pass through the `isManualQuery` value from verify-config.json directly. When `true`, Harness uses the raw `query` string as-is. When `false`, Harness reconstructs the query from `aggregation`, `serviceFilter`, `envFilter`, and `prometheusMetric` — this only works for simple `aggregation(metric{labels})` patterns.
+
+                ### Step 5: Add Elasticsearch health source
+
+                For the logs array in the config, build an Elasticsearch health source:
+
+                ```json
+                {
+                  "name": "elasticsearch",
+                  "identifier": "elasticsearch",
+                  "type": "ElasticSearch",
+                  "version": "v2",
+                  "spec": {
+                    "connectorRef": "{ELASTICSEARCH_CONNECTOR_REF}",
+                    "queryDefinitions": [],
+                    "healthSourceParams": {}
+                  }
+                }
+                ```
+
+                For each log entry in the service's logs array, add a queryDefinition:
+
+                ```json
+                {
+                  "identifier": "{log.identifier}",
+                  "name": "{log.name}",
+                  "groupName": "Logs Group",
+                  "query": "{log.query}",
+                  "queryParams": {
+                    "index": "{log.index}",
+                    "serviceInstanceField": "{log.serviceInstanceField}",
+                    "timeStampIdentifier": "{log.timestampField}",
+                    "timeStampFormat": "{log.timestampFormat}",
+                    "messageIdentifier": "{log.messageField}"
+                  },
+                  "metricThresholds": []
+                }
+                ```
+
+                ### Step 6: Create, update, or skip the monitored service
+
+                If it does not exist (GET returned 404) — **create**:
+                ```
+                POST /cv/api/monitored-service
+                  ?accountId={HARNESS_ACCOUNT_ID}
+                Content-Type: application/json
+                x-api-key: {HARNESS_API_KEY}
+                Harness-Account: {HARNESS_ACCOUNT_ID}
+
+                Body: the full monitored service payload
+                ```
+
+                If it already exists and differs from the desired state — **update**:
+                ```
+                PUT /cv/api/monitored-service/{identifier}
+                  ?accountId={HARNESS_ACCOUNT_ID}
+                  &orgIdentifier={HARNESS_ORG_ID}
+                  &projectIdentifier={HARNESS_PROJECT_ID}
+                Content-Type: application/json
+                x-api-key: {HARNESS_API_KEY}
+                Harness-Account: {HARNESS_ACCOUNT_ID}
+
+                Body: the full monitored service payload
+                ```
+
+                If it already exists and matches the desired state — **skip** (no API call needed).
+
+                ### Step 7: Validate monitored services
+
+                After creating/updating each monitored service:
+                1. GET the monitored service and confirm it exists with the expected health sources
+                2. Check that the number of metric definitions matches what was in the config
+                3. Check that the number of log query definitions matches what was in the config
+                4. Report success or failure for each service
+
+                ### Step 8: Inject Verify steps into the target deploy pipeline
+
+                **Use MCP for both read and write** — do NOT fall back to REST API for pipelines.
+
+                1. Fetch the target pipeline via MCP:
+                  ```
+                  harness_get(resource_type="pipeline", resource_id="{TARGET_PIPELINE_ID}", org_id="{HARNESS_ORG_ID}", project_id="{HARNESS_PROJECT_ID}")
+                  ```
+
+                2. Parse the pipeline YAML. For each service that was successfully configured (from Step 7),
+                  find the corresponding deploy stage (match by `serviceRef` in the stage's service config).
+
+                3. Within that stage's Canary Deployment step group, check if a Verify step already exists
+                  (look for `type: Verify`). If one already exists, leave it in place — do not duplicate it.
+
+                4. If no Verify step exists, do a **surgical insertion**: insert the Verify step YAML block
+                  **immediately before** the `K8sCanaryDelete` step in the `steps` array. There may be
+                  other steps (like Barriers) between CanaryDeploy and CanaryDelete — do NOT assume a
+                  fixed index. Scan the steps array to find the target position:
+                  - Find the index of the `K8sCanaryDelete` step.
+                  - If a `K8sRollingRollout` step exists at a LOWER index than CanaryDelete, insert
+                    the Verify step immediately before `K8sRollingRollout` instead (verification must
+                    complete before the full rollout).
+                  - Otherwise, insert immediately before `K8sCanaryDelete`.
+                  Do NOT rewrite or hardcode the entire pipeline YAML — only modify the specific stage(s)
+                  that need a Verify step, preserving everything else exactly as-is.
+
+                  The Verify step to insert:
+                  ```yaml
+                  - step:
+                      type: Verify
+                      name: Verify
+                      identifier: verify
+                      spec:
+                        isMultiServicesOrEnvs: false
+                        type: Canary
+                        monitoredService:
+                          type: Default
+                          spec: {}
+                        spec:
+                          sensitivity: LOW
+                          duration: 10m
+                          shouldUseCDNodes: true
+                      timeout: 2h
+                      failureStrategies:
+                        - onFailure:
+                            errors:
+                              - Verification
+                            action:
+                              type: StageRollback
+                        - onFailure:
+                            errors:
+                              - Unknown
+                            action:
+                              type: ManualIntervention
+                              spec:
+                                timeout: 2h
+                                onTimeout:
+                                  action:
+                                    type: Ignore
+                  ```
+
+                5. If any Verify steps were inserted, update the pipeline via MCP:
+                  ```
+                  harness_update(resource_type="pipeline", resource_id="{TARGET_PIPELINE_ID}", org_id="{HARNESS_ORG_ID}", project_id="{HARNESS_PROJECT_ID}", body=<modified pipeline YAML>)
+                  ```
+
+                  If all stages already had Verify steps, skip the update entirely.
+
+                **Implementation hint**: Use Python/PyYAML to parse the fetched YAML, walk the stages list,
+                find the `canaryDeployment` stepGroup in each matching stage, check its `steps` array for a
+                Verify step, and if missing, find the insertion point by scanning for step types:
+                1. Find the index of `K8sCanaryDelete`.
+                2. If `K8sRollingRollout` exists at a lower index, use that index as the insertion point.
+                3. Otherwise use the `K8sCanaryDelete` index as the insertion point.
+                Insert the Verify dict at the computed index. Then serialize back to YAML and pass to
+                `harness_update`. This keeps the edit surgical and avoids hardcoding the full pipeline content.
+
+                The Verify step uses `type: Default` for the monitored service reference — Harness automatically
+                resolves it to the monitored service matching the stage's serviceRef + environmentRef.
+
+                Key settings:
+                - `shouldUseCDNodes: true` — lets Harness fetch pod details from the K8s deploy step for accurate canary/primary node identification
+                - `sensitivity: LOW` — permissive anomaly detection (only flags significant deviations)
+                - `duration: 10m` — verification window length; allows sufficient data collection for meaningful comparison
+                - `timeout: 2h` — allows long verification windows without timing out the step itself
+                - `failureStrategies` — auto-rollback on verification failure, manual intervention on unknown errors
+
+                ## API Base URL
+
+                The Harness API base URL is provided as the `HARNESS_BASE_URL` environment variable. Do NOT
+                hardcode `app.harness.io` — use the configured value.
+
+                Full endpoint pattern:
+                ```
+                $HARNESS_BASE_URL/gateway/cv/api/monitored-service?accountId=$HARNESS_ACCOUNT_ID
+                ```
+
+                ## Output
+
+                Produce a summary report as JSON:
+
+                ```json
+                {
+                  "status": "success|partial|failed",
+                  "services": [
+                    {
+                      "name": "web",
+                      "monitored_service_id": "web_prod",
+                      "action": "created|updated|unchanged",
+                      "health_sources": {
+                        "prometheus": {
+                          "metrics_configured": 8,
+                          "status": "success"
+                        },
+                        "elasticsearch": {
+                          "queries_configured": 1,
+                          "status": "success"
+                        }
+                      },
+                      "verify_step_injected": true,
+                      "verify_step_already_existed": false
+                    }
+                  ],
+                  "pipeline": {
+                    "identifier": "my_deploy_pipeline",
+                    "stages_modified": 2,
+                    "stages_already_configured": 0,
+                    "status": "success"
+                  },
+                  "errors": []
+                }
+                ```
+
+                Write this report to `implement-report.json` in the working directory.
+
+                ## Rules
+
+                - Prefer the Harness MCP server for all operations (reads and writes). It has full permissions. Only fall back to direct REST API calls when MCP does not support the resource type (e.g. `monitored_service` is not an MCP resource — use the CV REST API for those). In particular, **always use MCP for pipeline read/write** — never use REST API for pipelines.
+                - Always check if a monitored service exists before creating (avoid duplicates)
+                - Use the exact connector refs provided — do not guess or assume connector identifiers
+                - Set `liveMonitoring.enabled: false` and `deploymentVerification.enabled: true` — this is for canary analysis, not continuous monitoring
+                - Group all Prometheus metrics under groupName "metrics"
+                - Group all Elasticsearch logs under groupName "Logs Group"
+                - Before submitting, normalize category and metricType values using this mapping:
+                  - Category: "Custom"→"Infrastructure", "Saturation"→"Infrastructure", "Throughput"→"Performance" (only valid values: Performance, Errors, Infrastructure)
+                  - MetricType: "CUSTOM"→"OTHER" (only valid values: RESP_TIME, THROUGHPUT, ERROR, INFRA, OTHER, APDEX)
+                - If the API returns an error, log it and continue with the next service — do not abort entirely
+                - Replace all `${namespace}` placeholders in queries with the actual NAMESPACE value before submitting
+                - The service identifier in Harness should be derived from the service name by replacing hyphens with underscores (e.g. "my-service" becomes "my_service")
+                - Ignore the `evidence` and `requiresVerification` fields on each metric — they are Analyze-side metadata used by the Evaluate Agent to flag low-confidence metrics for human review. They are NOT part of the Harness CV monitored-service schema and the API will reject the payload if they are included. Copy fields explicitly when building each `metricDefinition` rather than spreading the whole metric object.
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+              TARGET_PIPELINE_ID: ${{inputs.target_pipeline_id}}
+              NAMESPACE: ${{inputs.namespace}}
+              HARNESS_ACCOUNT_ID: ${{inputs.account_id}}
+              HARNESS_ORG_ID: ${{inputs.org_id}}
+              HARNESS_PROJECT_ID: ${{inputs.project_id}}
+              HARNESS_ENV_ID: ${{inputs.env_id}}
+              PROMETHEUS_CONNECTOR_REF: ${{inputs.prometheus_connector_ref.id}}
+              ELASTICSEARCH_CONNECTOR_REF: ${{inputs.elasticsearch_connector_ref.id}}
+              HARNESS_BASE_URL: ${{inputs.base_url}}

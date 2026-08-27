@@ -1,0 +1,35 @@
+pipeline:
+  name: Claude Code Security Review Sample
+  identifier: claudeCodeSecurityAgentSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Claude Code Security Review
+        identifier: Run_claudeCodeSecurityAgent
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Claude Code Security Review
+                  identifier: claudeCodeSecurityAgent
+                  spec:
+                    agentName: claudeCodeSecurityAgent
+                    agentSettings:
+                      llm_connector: <+input>

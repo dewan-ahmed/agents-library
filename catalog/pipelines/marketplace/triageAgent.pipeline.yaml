@@ -1,0 +1,34 @@
+pipeline:
+  name: False Positive Triage Sample
+  identifier: triageAgentSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run False Positive Triage
+        identifier: Run_triageAgent
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: False Positive Triage
+                  identifier: triageAgent
+                  spec:
+                    agentName: triageAgent
+                    agentSettings:
+                      execution_id: <+pipeline.executionId>
+                      account_id: <+account.identifier>
+                      org_id: <+org.identifier>
+                      project_id: <+project.identifier>
+                      llm_connector: <+input>

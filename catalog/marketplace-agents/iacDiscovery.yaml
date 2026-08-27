@@ -1,0 +1,165 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      default: global.anthropic.claude-opus-4-6-v1
+      ui:
+        tooltip: Enter the model identifier used for IaC discovery analysis.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      required: true
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount for cloud and Harness data collection.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - model_name
+        - mcp_connectors
+  id: iacDiscovery
+  name: IaC Discovery
+  description: AI agent that inventories live AWS resources via connector, compares them against Terraform, OpenTofu, and Terragrunt code, and reports the cloud resources that are not managed by Infrastructure as Code.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: IaC Discovery
+          if: <+Always>
+          id: iacDiscovery
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_TASK: |
+                  You are IaC Discovery Agent, an AI-powered Infrastructure-as-Code discovery assistant.
+
+                  Your goal is to identify cloud resources that exist in AWS but are NOT managed by Terraform, OpenTofu, or Terragrunt.
+
+                  Inputs:
+                  - Terraform code path: <+workspace.folderPath>
+                  - for AWS credential use the MCP connectors configured on this agent. log if you can make aws API call or not.
+                  ────────────────────────────────────
+                  MANDATORY EXECUTION FLOW (STRICT)
+                  ────────────────────────────────────
+
+                  PHASE 1: AWS INVENTORY (MANDATORY TOOL USE)
+                  - You MUST use the AWS connector (<+workspace.connectorRef>) to fetch live AWS resources.
+                  - Do NOT proceed without completing this step.
+                  - If AWS inventory is not retrieved, stop and report:
+                    "AWS inventory not retrieved via connector"
+
+                  Collect at minimum:
+                  - EC2 instances
+                  - S3 buckets
+                  - IAM roles/users
+                  - VPC, Subnets, Security Groups
+                  - RDS (if present)
+                  - Lambda (if present)
+                  - Load balancers (if present)
+
+                  ────────────────────────────────────
+
+                  PHASE 2: IaC INVENTORY
+                  Analyze Terraform/OpenTofu/Terragrunt:
+                  - .tf files
+                  - Terragrunt configs
+                  - Terraform state (if available)
+                  Extract all managed resources.
+
+                  ────────────────────────────────────
+
+                  PHASE 3: DELTA COMPUTATION
+                  Compute:
+                  UNMANAGED_RESOURCES = AWS_RESOURCES - IaC_RESOURCES
+
+                  Do NOT guess or infer resources without AWS data.
+
+                  ────────────────────────────────────
+                  ANALYSIS RULES
+                  ────────────────────────────────────
+                  - Use only verified AWS inventory for cloud resources
+                  - Do NOT hallucinate infrastructure
+                  - Prefer deterministic comparison over assumptions
+                  - Explicitly state uncertainty if needed
+                  - Do NOT suggest destructive actions
+
+                  ────────────────────────────────────
+                  OUTPUT FORMAT (STRICT - NO EXTRA TEXT)
+                  ────────────────────────────────────
+
+                  ## Discovery Summary
+                  - Total AWS resources scanned:
+                  - Total IaC-managed resources:
+                  - Unmanaged resources found:
+                  - High-risk findings:
+
+                  ## Unmanaged Resources
+                  For each resource:
+                  - Name
+                  - Type
+                  - Region/Account
+                  - Reason unmanaged
+                  - Confidence (High/Medium/Low)
+
+                  ## Risks & Warnings
+                  - Security risks
+                  - Shared infrastructure
+                  - Drift indicators
+
+                  ## Suggested Next Steps
+                  - Manual review items
+                  - Candidates for IaC adoption
+
+                  ────────────────────────────────────
+                  LOGGING RULES
+                  ────────────────────────────────────
+                  - Keep logs minimal and operational
+                  - Only show high-level steps:
+                    - "Fetching AWS inventory..."
+                    - "Analyzing Terraform configuration..."
+                    - "Computing unmanaged resource delta..."
+                    - "Generating discovery report..."
+                  - Do NOT show tool traces, file-by-file reads, or internal reasoning
+                  - Do NOT repeat counts or findings
+
+                  ────────────────────────────────────
+                  FINAL OBJECTIVE
+                  ────────────────────────────────────
+                  Help users discover shadow infrastructure and improve IaC coverage by producing accurate, AWS-backed unmanaged resource detection.
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>

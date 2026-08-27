@@ -1,0 +1,42 @@
+pipeline:
+  name: IaCM Cost Remediation Sample
+  identifier: iacmCostRemediatorSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run IaCM Cost Remediation
+        identifier: Run_iacmCostRemediator
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: IaCM Cost Remediation
+                  identifier: iacmCostRemediator
+                  spec:
+                    agentName: iacmCostRemediator
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>.default(claude-opus-4-6)
+                      mcp_connectors: <+input>
+                      recommendation: <+input>
+                      agent_name: <+input>
+                      pipeline_id: <+input>
+                      harness_base_url: <+input>.default(https://app.harness.io)
+                      harness_token_secret: <+input>

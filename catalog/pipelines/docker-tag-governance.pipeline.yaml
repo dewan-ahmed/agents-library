@@ -1,0 +1,170 @@
+pipeline:
+  name: Docker Tag Governance
+  identifier: dockerTagGovernance
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  variables:
+    - name: llmConnector
+      type: String
+      description: Account, org, or project LLM connector reference.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier exposed by your LLM connector.
+      required: true
+      value: <+input>
+    - name: dockerRepositories
+      type: String
+      description: Comma-separated Docker Hub repositories in namespace/name format.
+      required: true
+      value: <+input>
+    - name: cleanupMode
+      type: String
+      description: "Cleanup behavior: report-only, delete-with-approval, or auto-delete."
+      required: true
+      value: <+input>.default(report-only)
+    - name: retainCount
+      type: String
+      description: Number of most-recent tags to retain in each repository.
+      required: true
+      value: <+input>.default(10)
+    - name: protectedPatterns
+      type: String
+      description: Comma-separated tag patterns that must never be deleted.
+      required: true
+      value: <+input>.default(latest,prod-*,release-*,v[0-9]*)
+    - name: daysThreshold
+      type: String
+      description: Tags older than this many days can become deletion candidates.
+      required: true
+      value: <+input>.default(30)
+    - name: estimatedCostPerGB
+      type: String
+      description: Estimated monthly storage cost per GB in USD.
+      required: false
+      value: <+input>.default(0.50)
+    - name: dockerUsername
+      type: String
+      description: Docker Hub username; required only when cleanup executes.
+      required: false
+      value: <+input>
+    - name: dockerHubToken
+      type: Secret
+      description: Docker Hub access token secret; required only when cleanup executes.
+      required: false
+      value: <+input>
+  stages:
+    - stage:
+        name: Tag Analysis
+        identifier: tag_analysis
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Analyze Docker Tags
+                  identifier: analyze_docker_tags
+                  spec:
+                    agentName: ca_docker_tag_governance
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+                      dockerRepositories: <+pipeline.variables.dockerRepositories>
+                      cleanupMode: report-only
+                      retainCount: <+pipeline.variables.retainCount>
+                      protectedPatterns: <+pipeline.variables.protectedPatterns>
+                      daysThreshold: <+pipeline.variables.daysThreshold>
+                      estimatedCostPerGB: <+pipeline.variables.estimatedCostPerGB>
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+    - stage:
+        name: Approval Gate
+        identifier: approval_gate
+        type: Approval
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.variables.cleanupMode> == "delete-with-approval"
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: HarnessApproval
+                  name: Approve Tag Deletion
+                  identifier: approve_tag_deletion
+                  spec:
+                    approvalMessage: |
+                      Review the analysis-stage logs before approving deletion.
+
+                      Repositories: <+pipeline.variables.dockerRepositories>
+                      Retain count: <+pipeline.variables.retainCount>
+                      Protected patterns: <+pipeline.variables.protectedPatterns>
+                      Days threshold: <+pipeline.variables.daysThreshold>
+                    includePipelineExecutionHistory: true
+                    isAutoRejectEnabled: false
+                    approvers:
+                      userGroups:
+                        - account._account_all_users
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                    approverInputs: []
+                  timeout: 1d
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+    - stage:
+        name: Execute Cleanup
+        identifier: execute_cleanup
+        type: CI
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.variables.cleanupMode> == "delete-with-approval" || <+pipeline.variables.cleanupMode> == "auto-delete"
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Delete Docker Tags
+                  identifier: delete_docker_tags
+                  spec:
+                    agentName: ca_docker_tag_governance
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+                      dockerRepositories: <+pipeline.variables.dockerRepositories>
+                      dockerUsername: <+pipeline.variables.dockerUsername>
+                      dockerHubToken: <+pipeline.variables.dockerHubToken>
+                      cleanupMode: auto-delete
+                      retainCount: <+pipeline.variables.retainCount>
+                      protectedPatterns: <+pipeline.variables.protectedPatterns>
+                      daysThreshold: <+pipeline.variables.daysThreshold>
+                      estimatedCostPerGB: <+pipeline.variables.estimatedCostPerGB>
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure

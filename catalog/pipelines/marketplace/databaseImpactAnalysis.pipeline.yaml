@@ -1,0 +1,32 @@
+pipeline:
+  name: Database Impact Analysis Sample
+  identifier: databaseImpactAnalysisSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Database Impact Analysis
+        identifier: Run_databaseImpactAnalysis
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Database Impact Analysis
+                  identifier: databaseImpactAnalysis
+                  spec:
+                    agentName: databaseImpactAnalysis
+                    agentSettings:
+                      sql: <+input>
+                      llm_connector: <+input>
+                      model_name: <+input>.default(global.anthropic.claude-haiku-4-5-20251001-v1:0)

@@ -1,0 +1,414 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      default:
+        - harness_mcp
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify the MCP connector refs to mount. Include a Harness MCP connector so the agent can read pipelines and monitored services.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    target_pipeline_id:
+      type: string
+      label: Target Pipeline ID
+      required: true
+      ui:
+        tooltip: Enter the identifier of the deploy pipeline the agent inspects for Canary Verify steps.
+        placeholder: my_deploy_pipeline
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    namespace:
+      type: string
+      label: Namespace
+      required: true
+      ui:
+        tooltip: Enter the Kubernetes namespace used to resolve namespace placeholders in the generated PromQL queries.
+        placeholder: my-namespace
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    account_id:
+      type: string
+      label: Account ID
+      required: true
+      ui:
+        tooltip: Enter the Harness account identifier used for Continuous Verification REST calls.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    org_id:
+      type: string
+      label: Organization ID
+      required: true
+      ui:
+        tooltip: Enter the Harness organization identifier that scopes the pipeline and monitored services.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    project_id:
+      type: string
+      label: Project ID
+      required: true
+      ui:
+        tooltip: Enter the Harness project identifier that scopes the pipeline and monitored services.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    env_id:
+      type: string
+      label: Environment ID
+      required: true
+      ui:
+        tooltip: Enter the Harness environment identifier used to build monitored service identifiers.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    prometheus_connector_ref:
+      type: connector
+      label: Prometheus Connector
+      required: true
+      ui:
+        tooltip: Select the Prometheus connector used as the metrics health source when building the desired-state payload.
+        placeholder: Select Prometheus Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    elasticsearch_connector_ref:
+      type: connector
+      label: Elasticsearch Connector
+      required: true
+      ui:
+        tooltip: Select the Elasticsearch connector used as the logs health source when building the desired-state payload.
+        placeholder: Select Elasticsearch Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    base_url:
+      type: string
+      label: Harness Base URL
+      required: true
+      default: https://app.harness.io
+      ui:
+        tooltip: Enter the Harness base URL used for Continuous Verification REST API calls.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - mcp_connectors
+    - title: Verification Scope
+      items:
+        - target_pipeline_id
+        - namespace
+    - title: Harness Scope
+      items:
+        - account_id
+        - org_id
+        - project_id
+        - env_id
+        - prometheus_connector_ref
+        - elasticsearch_connector_ref
+        - base_url
+  id: verificationEvaluator
+  name: Verification Evaluation
+  description: AI agent that performs a read-only preview of Continuous Verification changes, reporting which monitored services and pipeline Verify steps would be created, updated, or left unchanged; requires the verify-config.json produced by the Verification Analysis agent.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Evaluate Changes
+          if: <+Always>
+          id: evaluateChanges
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_TASK: |
+                You are an infrastructure evaluation agent. Your job is to read a verification
+                configuration file and determine — without making any changes — what the Implement
+                Agent would do if it ran now. Write a structured report and a human-readable summary
+                that downstream pipeline steps can consume.
+
+                ## Read-Only Constraint
+
+                You MUST NOT modify any Harness resource. Do not POST, PUT, or DELETE. Do not call
+                harness_create, harness_update, or harness_delete. You may only read.
+
+                ## Input
+
+                Read the file `verify-config.json` from the working directory.
+
+                ## Bootstrap (do this FIRST, before anything else)
+
+                Agent settings are provided as environment variables on this step. Read them directly —
+                do NOT fetch a pipeline or parse an `agentSettings` block to discover them:
+
+                  TARGET_PIPELINE_ID        — pipeline identifier the Implement Agent would inject Verify steps into
+                  HARNESS_ACCOUNT_ID        — Harness account identifier
+                  HARNESS_ORG_ID            — organization identifier
+                  HARNESS_PROJECT_ID        — project identifier
+                  HARNESS_ENV_ID            — environment identifier for monitored services
+                  PROMETHEUS_CONNECTOR_REF  — connector identifier for Prometheus
+                  ELASTICSEARCH_CONNECTOR_REF — connector identifier for Elasticsearch
+                  NAMESPACE                 — Kubernetes namespace for PromQL query interpolation
+                  HARNESS_BASE_URL          — Harness API base URL, e.g. https://app.harness.io
+
+                Extract the API key for REST GETs (do this ONCE, store in a variable, reuse):
+                  ```bash
+                  HARNESS_API_KEY=$(echo "$PLUGIN_MCP_SERVERS" | python3 -c "import json,sys; servers=json.loads(sys.stdin.read()); print(next(iter(servers.values()))['headerValue'])")
+                  ```
+
+                ### What MCP can and cannot do
+
+                MCP supports `pipeline`, `service`, `environment`, `connector`, etc. MCP does NOT support
+                `monitored_service` (CV API) — for that, use REST GETs against
+                `$HARNESS_BASE_URL/gateway/cv/api/monitored-service/...`.
+
+                ## Task
+
+                For each service in verify-config.json, compute what the Implement Agent **would** do.
+
+                ### Step 1: Resolve placeholder values
+
+                Replace `${namespace}` in all PromQL queries with the actual NAMESPACE value (so the
+                desired-state payload you build for comparison matches what Implement would produce).
+
+                ### Step 2: Build the desired monitored-service payload (in memory only)
+
+                For each service, construct the same monitored service JSON payload that the Implement
+                Agent would build (see the Implement Agent spec for full schema). Apply the same
+                normalizations (category mapping, metricType mapping, riskCategory compound enum,
+                hyphen-to-underscore in identifiers, isManualQuery passthrough). Do not POST it.
+
+                ### Step 3: Fetch the existing monitored service
+
+                For each service, GET:
+                ```
+                GET $HARNESS_BASE_URL/gateway/cv/api/monitored-service/{serviceIdentifier}_{envIdentifier}
+                  ?accountId=$HARNESS_ACCOUNT_ID
+                  &orgIdentifier=$HARNESS_ORG_ID
+                  &projectIdentifier=$HARNESS_PROJECT_ID
+                ```
+
+                Three possible outcomes:
+                - **404 Not Found** — Implement would CREATE this monitored service.
+                - **200 OK and existing config matches desired** — Implement would SKIP (no change).
+                - **200 OK and existing config differs from desired** — Implement would UPDATE.
+
+                When comparing, use the same equality criteria the Implement Agent uses to decide
+                "unchanged" — compare the set of health sources, the set of metric definitions
+                (by identifier and query), and the set of log query definitions (by identifier and
+                query). Ignore fields the Implement Agent doesn't manage (timestamps, etc).
+
+                ### Step 4: Inspect (do NOT modify) the target pipeline
+
+                Fetch the target pipeline via MCP:
+                ```
+                harness_get(resource_type="pipeline", resource_id="$TARGET_PIPELINE_ID", org_id="$HARNESS_ORG_ID", project_id="$HARNESS_PROJECT_ID")
+                ```
+
+                Parse the YAML. For each service in verify-config.json, find the matching deploy stage
+                (by `serviceRef`). Within that stage's Canary Deployment step group, determine whether
+                a `Verify` step already exists.
+
+                For stages that lack a Verify step, compute the insertion index the Implement Agent
+                would use (immediately before `K8sCanaryDelete`, or before `K8sRollingRollout` if it
+                exists at a lower index). Record the stage identifier and the insertion point — but
+                do NOT call harness_update.
+
+                ### Step 5: Aggregate the change summary
+
+                Tally:
+                - `monitored_services_to_create` — count of services that would be created
+                - `monitored_services_to_update` — count that would be updated
+                - `monitored_services_unchanged` — count that already match
+                - `stages_to_inject_verify` — count of pipeline stages that would gain a Verify step
+                - `stages_already_configured` — count of stages that already have a Verify step
+                - `metrics_requiring_verification` — count of metrics across all services where
+                  `requiresVerification` is true (analyze-side metadata indicating the agent could
+                  not fully confirm label values, scrape configuration, or metric prefix)
+
+                Set `changes_pending = true` if any of:
+                - monitored_services_to_create > 0
+                - monitored_services_to_update > 0
+                - stages_to_inject_verify > 0
+
+                Otherwise `changes_pending = false`.
+
+                `metrics_requiring_verification` does NOT affect `changes_pending` — it's a
+                quality signal for the human approver, not a structural change.
+
+                ### Step 6: Build the human-readable summary (plain text)
+
+                Compose a concise PLAIN TEXT summary. The Harness manual approval UI does NOT render
+                markdown — it shows the raw text — so do NOT use markdown syntax. Specifically:
+
+                - No `#`, `##`, or `###` headers
+                - No `**bold**` or `*italic*`
+                - No backticks for inline code
+                - No `-` or `*` bullet markers (use indentation instead)
+                - No tables
+
+                Use indentation, blank lines, and aligned colons to give the summary structure.
+
+                Example shape:
+
+                ```
+                Verification Setup Preview
+
+                3 changes pending.
+
+                Monitored services:
+                  Create:    web, catalog
+                  Update:    checkout (3 new metrics, 1 removed log query)
+                  Unchanged: cart, payment, shipping, users
+
+                Pipeline my_deploy_pipeline:
+                  Inject Verify step:  web, catalog, checkout
+                  Already configured:  cart, payment
+
+                Verification flags:
+                  4 metrics require manual review:
+                    web / http_request_duration_seconds        (scrape annotation not confirmed)
+                    checkout / payment_failed_total            (5xx label values not confirmed)
+                    checkout / order_processing_seconds        (metric prefix not confirmed)
+                    catalog / catalog_request_count            (manifests not available)
+                ```
+
+                If `metrics_requiring_verification` is 0, omit the "Verification flags" block
+                entirely. If more than ~10 flagged metrics, list counts per service rather than
+                every metric.
+
+                If `changes_pending` is false, the summary should clearly say "No changes pending —
+                current configuration already matches the desired state."
+
+                Keep the summary under ~2KB. If the change list is large, summarize counts rather than
+                listing every metric.
+
+                The JSON field name remains `summary_markdown` for backwards compatibility with downstream
+                pipeline steps, but the value MUST be plain text (no markdown syntax).
+
+                ## Output
+
+                Write a structured report to `evaluate-report.json` in the working directory. This
+                file is the agent's only output — downstream pipeline steps read it directly.
+
+                ```json
+                {
+                  "changes_pending": true,
+                  "summary_markdown": "## Verification Setup Preview\n\n...",
+                  "monitored_services": {
+                    "to_create": ["web", "catalog"],
+                    "to_update": [
+                      {
+                        "name": "checkout",
+                        "diff": {
+                          "metrics_added": ["checkout_error_rate", "checkout_latency_p99"],
+                          "metrics_removed": [],
+                          "log_queries_added": [],
+                          "log_queries_removed": ["checkout_debug_logs"]
+                        }
+                      }
+                    ],
+                    "unchanged": ["cart", "payment", "shipping", "users"]
+                  },
+                  "pipeline": {
+                    "identifier": "my_deploy_pipeline",
+                    "stages_to_inject_verify": ["web", "catalog", "checkout"],
+                    "stages_already_configured": ["cart", "payment"]
+                  },
+                  "metrics_requiring_verification": {
+                    "count": 4,
+                    "items": [
+                      {
+                        "service": "web",
+                        "metric": "http_request_duration_seconds",
+                        "rationale": "scrape annotation not confirmed"
+                      },
+                      {
+                        "service": "checkout",
+                        "metric": "payment_failed_total",
+                        "rationale": "5xx label values not confirmed"
+                      }
+                    ]
+                  },
+                  "errors": []
+                }
+                ```
+
+                Do NOT attempt to set Harness pipeline output variables yourself. The report file is
+                the contract.
+
+                ## Rules
+
+                - **Read only.** No POST, PUT, DELETE. No harness_create/update/delete.
+                - Use the Harness MCP for pipeline reads. Use REST GETs for monitored services
+                  (MCP does not support that resource type).
+                - Apply the same normalizations the Implement Agent uses (category, metricType,
+                  riskCategory, hyphen-to-underscore in identifiers, namespace placeholder
+                  resolution) when building the desired-state payload for comparison — otherwise
+                  spurious diffs will appear.
+                - Compare existing vs desired by the fields the Implement Agent actually manages.
+                  Ignore platform-managed fields (timestamps, audit metadata) when computing diffs.
+                - If `verify-config.json` is missing, write a report with `changes_pending: false`,
+                  a `summary_markdown` explaining the abort, and the missing-file error in `errors`.
+                - If the target pipeline cannot be fetched, record it in `errors[]` and in the
+                  summary, but continue with monitored-service evaluation.
+                - Errors during evaluation must NOT cause the pipeline to fail outright — always
+                  produce a well-formed `evaluate-report.json`. Downstream steps decide what to do.
+                - The Analyze Agent attaches `evidence` and `requiresVerification` fields to each
+                  metric in `verify-config.json`. Use `requiresVerification` to populate the
+                  `metrics_requiring_verification` section of the report and the "Verification flags"
+                  block of the summary. Do NOT include `evidence` or `requiresVerification` when
+                  building the desired-state monitored-service payload for diffing — those fields
+                  are not part of the Harness CV schema and would cause spurious diffs against the
+                  existing platform-side configuration.
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+              TARGET_PIPELINE_ID: ${{inputs.target_pipeline_id}}
+              NAMESPACE: ${{inputs.namespace}}
+              HARNESS_ACCOUNT_ID: ${{inputs.account_id}}
+              HARNESS_ORG_ID: ${{inputs.org_id}}
+              HARNESS_PROJECT_ID: ${{inputs.project_id}}
+              HARNESS_ENV_ID: ${{inputs.env_id}}
+              PROMETHEUS_CONNECTOR_REF: ${{inputs.prometheus_connector_ref.id}}
+              ELASTICSEARCH_CONNECTOR_REF: ${{inputs.elasticsearch_connector_ref.id}}
+              HARNESS_BASE_URL: ${{inputs.base_url}}

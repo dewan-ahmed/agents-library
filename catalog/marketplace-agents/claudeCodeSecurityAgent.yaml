@@ -1,0 +1,98 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      default: Claude_Security
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used for Claude Code Security review (Anthropic or Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      default: claude-sonnet-4-6
+      ui:
+        tooltip: Enter the Anthropic or Bedrock model identifier used for security review.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    max_turns:
+      type: string
+      label: Max Agent Turns
+      default: "150"
+      ui:
+        tooltip: Enter the maximum number of agent turns before the step times out. Increase for large pull requests after reliability testing.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - model_name
+        - variant: more
+          items:
+            - max_turns
+  id: claudeCodeSecurityAgent
+  name: Claude Code Security Review
+  description: AI agent that performs a security review on pull request diff, writes SARIF findings, and emits severity counts as step output variables for policy evaluation.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Security Review
+          if: <+Always>
+          id: securityReview
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+              memory: 6Gi
+              cpu: "3"
+            env:
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_MAX_TURNS: ${{inputs.max_turns}}
+              PLUGIN_ALLOWED_TOOLS: Read,Grep,Write,Bash
+              PLUGIN_LOG_FILE: /harness/.agent/output/security-review-log.jsonl
+              PLUGIN_TASK: |
+                1. Run /security-review for the changed files on this branch
+                  (diff against origin/$TARGET_BRANCH).
+                2. Convert the findings to SARIF v2.1.0 format.
+                3. Write the SARIF to /harness/.agent/output/security-review.sarif
+                4. Write the Summary metadata counts to $DRONE_OUTPUT:
+                     echo "CRITICAL=<CRITICAL COUNT>" >> "$DRONE_OUTPUT"
+                     echo "HIGH=<HIGH COUNT>" >> "$DRONE_OUTPUT"
+                     echo "MEDIUM=<MEDIUM COUNT>" >> "$DRONE_OUTPUT"
+                     echo "LOW=<LOW COUNT>" >> "$DRONE_OUTPUT"
+                5. Run through the QA task checklist
+
+                QA task checklist:
+                1)  /harness/.agent/output/security-review.sarif was created
+                2) The summary metadata was created at "$DRONE_OUTPUT"
+                3) The summary metadata at "$DRONE_OUTPUT" matches our data consistency rules.
+
+                For data consistency, we want to normalize to critical, high, medium, low, or info:
+                        severity_map = {
+                            # SARIF Levels
+                            "error": 7.9,
+                            "warning": 6.5,
+                            "note": 2.0,
+                            "none": 0.0,
+                            # Custom tool specific severity levels
+                            "low": 2,
+                            "medium": 5.5,
+                            "moderate": 5.5,
+                            "high": 7.9,
+                            "critical": 9.5,
+                        }

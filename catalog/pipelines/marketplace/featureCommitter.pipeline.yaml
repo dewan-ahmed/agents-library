@@ -1,0 +1,38 @@
+pipeline:
+  name: Feature File Commit Sample
+  identifier: featureCommitterSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Feature File Commit
+        identifier: Run_featureCommitter
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Feature File Commit
+                  identifier: featureCommitter
+                  spec:
+                    agentName: featureCommitter
+                    agentSettings:
+                      llm_connector: <+input>
+                      repo_id: <+input>
+                      org_id: <+org.identifier>
+                      project_id: <+project.identifier>

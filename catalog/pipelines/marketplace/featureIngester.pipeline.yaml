@@ -1,0 +1,30 @@
+pipeline:
+  name: Jira Feature Ingestion Sample
+  identifier: featureIngesterSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Jira Feature Ingestion
+        identifier: Run_featureIngester
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Jira Feature Ingestion
+                  identifier: featureIngester
+                  spec:
+                    agentName: featureIngester
+                    agentSettings:
+                      llm_connector: <+input>

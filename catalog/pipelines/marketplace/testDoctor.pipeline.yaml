@@ -1,0 +1,37 @@
+pipeline:
+  name: Test Doctor Sample
+  identifier: testDoctorSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Test Doctor
+        identifier: Run_testDoctor
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Test Doctor
+                  identifier: testDoctor
+                  spec:
+                    agentName: testDoctor
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>.default(global.anthropic.claude-opus-4-6-v1)
+                      mcp_connectors: <+input>

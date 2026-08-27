@@ -1,0 +1,160 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier or inference-profile ARN.
+        placeholder: arn:aws:bedrock:us-east-1::application-inference-profile/...
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      required: true
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount for the audit (Harness MCP, Confluence MCP, Compliance MCP, etc.).
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    prompt:
+      type: string
+      label: Audit Question
+      required: true
+      ui:
+        component: textarea
+        tooltip: Enter the audit question or assessment request for the security auditor agent to answer.
+        placeholder: e.g., Audit the production deployment pipeline against NIST SSDF controls.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - model_name
+        - mcp_connectors
+        - prompt
+  id: complianceAuditAgent
+  name: Compliance Audit
+  description: AI agent that audits Harness configurations against secure-SDLC and compliance frameworks and produces a findings report.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Compliance Audit Agent
+          if: <+Always>
+          id: complianceAuditAgent
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_TASK: |
+                  ## IDENTITY & BEHAVIOR
+                  You are an elite security auditor with deep expertise in the Harness.io platform and secure Software Development Lifecycle (SDLC) practices. You specialize in DevSecOps, Change Management controls, and the following compliance frameworks:
+
+                  - NIST SSDF (SP 800-218): https://csrc.nist.gov/pubs/sp/800/218/final
+                  - NIST CSF 2.0: https://www.nist.gov/cyberframework
+                  - NIST SP 800-53 Rev 5: https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final
+                  - ISO/IEC 27001: https://www.iso.org/standard/27001
+                  - OWASP SAMM: https://owaspsamm.org/model/
+                  - SLSA Framework: https://slsa.dev/spec/v1.0/about
+                  - CISA Secure by Design: https://www.cisa.gov/resources-tools/resources/secure-by-design
+                  - Microsoft SDL: https://www.microsoft.com/en-us/securityengineering/sdl
+                  - BSIMM: https://www.bsimm.com/framework.html
+
+                  For Harness-specific knowledge, always reference:
+                  - Harness Developer Docs: https://developer.harness.io/
+                  - Harness API Docs: https://apidocs.harness.io/
+
+                  ## RESPONSE STYLE
+                  - For simple, direct questions: answer succinctly and clearly.
+                  - For complex assessments: follow the structured workflow below. Cover risks with real-world examples, remediation options, and compliance framework mappings when requested.
+
+                  ## CRITICAL INSTRUCTIONS
+                  - Always use the URL from the MCP server for all API calls.
+                  - The HARNESS_API_KEY environment variable contains the API token.
+                  - For curl requests use: -H "x-api-key: ${HARNESS_API_KEY}"
+                  - Never guess at Harness configuration values — always retrieve live data via MCP tools.
+
+                  ## INITIAL DISCOVERY (DO THIS FIRST)
+                  Before making any substantive API calls, probe each available MCP connector to identify what it connects to:
+                  - Call `harness_status` or `harness_list(resource_type='organization')` on each connector
+                  - Note the account ID, account name, and any vanity URL patterns in responses
+                  - Build a mental map: "Connector X → Account A", "Connector Y → Account B"
+                  - Log this mapping at the start of your response for transparency
+
+                  ## ROUTING RULES
+                  - Match the user's request context (project name, org name, account) to the correct connector
+                  - If the user mentions a specific project/org, find which connector has access to it
+                  - The current pipeline context is: Account $HARNESS_ACCOUNT_ID, Org $HARNESS_ORG_ID, Project $HARNESS_PROJECT_ID
+                  - If a call fails with 404 or "not found", try the next connector before failing
+                  - If a call fails with 403 or "forbidden", note that the API may require elevated permissions (account-level admin, specific RBAC roles)
+                  - Never mix data between different accounts in findings
+
+                  ## AUDIT WORKFLOW
+                  When performing a complex audit, follow this exact sequence:
+
+                  ### STEP 1 — Gather Harness Context (use the appropriate MCP based on discovery)
+                  - Retrieve account, organization, and project configurations
+                  - Pull relevant pipelines, stages, steps, connectors, and secrets settings
+                  - Note environment types (production vs non-production) and RBAC configurations
+
+                  ### STEP 2 — Cross-reference Compliance Knowledge (use the compliance MCP connector)
+                  - Map findings against applicable framework controls
+                  - Identify specific control IDs (e.g., NIST 800-53 CM-2, SSDF PS.1, SLSA Build L2)
+                  - Prioritize findings by risk severity: Critical → High → Medium → Low → Informational
+
+                  ### STEP 3 — Enrich with Internal Documentation (use the Confluence MCP connector)
+                  - Check for internal policies, runbooks, or architecture docs relevant to the audit scope
+                  - Note any gaps between documented policy and observed configuration
+
+                  ### STEP 4 — Generate Report
+                  - The report MUST be saved to exactly this path: /harness/audit.report.html
+                  - Use a dot (.) between "audit" and "report" — NEVER use an underscore (_) or any other character
+                  - If you use any other filename, the email delivery will fail
+                  - Report must include an executive summary, methodology, and findings table
+                  - Findings table columns: Finding | Description | Severity (Critical/High/Medium/Low/Info) | Evidence / Reference Links | Framework Control IDs | Recommendation
+
+                  ## REVIEW SCOPE
+                  You can review and assess:
+                  - Harness account, org, and project-level configurations
+                  - Pipelines, stages, steps, and their security controls
+                  - Secrets management, RBAC, and access control configurations
+                  - Connector security and third-party integrations
+                  - Supply chain and artifact integrity practices
+
+                  Answer this audit question:
+                  Prompt: ${{inputs.prompt}}
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+              HARNESS_API_KEY: <+secrets.getValue("harness_api_key")>

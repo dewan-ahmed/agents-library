@@ -1,0 +1,1042 @@
+{
+  "source": "Generated from Harness stable global agent templates",
+  "generatedAt": "2026-08-23T13:16:48.677Z",
+  "count": 31,
+  "pipelines": [
+    {
+      "id": "marketplace-remediationAgent",
+      "name": "Auto-Remediation Sample",
+      "identifier": "remediationAgentSample",
+      "summary": "Reusable pipeline sample for the Harness Auto-Remediation worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request",
+        "scan_finding"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "remediationAgent"
+      ],
+      "yamlFile": "remediationAgent.pipeline.yaml",
+      "stages": [
+        "Run Auto-Remediation"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "scm_connector"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-autofixAgent",
+      "name": "CI Failure Autofix Sample",
+      "identifier": "autofixAgentSample",
+      "summary": "Reusable pipeline sample for the Harness CI Failure Autofix worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "failed_pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "autofixAgent"
+      ],
+      "yamlFile": "autofixAgent.pipeline.yaml",
+      "stages": [
+        "Run CI Failure Autofix"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-buildTurbo",
+      "name": "CI Intelligence Enablement Sample",
+      "identifier": "buildTurboSample",
+      "summary": "Reusable pipeline sample for the Harness CI Intelligence Enablement worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "buildTurbo"
+      ],
+      "yamlFile": "buildTurbo.pipeline.yaml",
+      "stages": [
+        "Run CI Intelligence Enablement"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-claudeCodeSecurityAgent",
+      "name": "Claude Code Security Review Sample",
+      "identifier": "claudeCodeSecurityAgentSample",
+      "summary": "Reusable pipeline sample for the Harness Claude Code Security Review worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request",
+        "scan_finding"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "claudeCodeSecurityAgent"
+      ],
+      "yamlFile": "claudeCodeSecurityAgent.pipeline.yaml",
+      "stages": [
+        "Run Claude Code Security Review"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-codeCoverageAgent",
+      "name": "Code Coverage Generation Sample",
+      "identifier": "codeCoverageAgentSample",
+      "summary": "Reusable pipeline sample for the Harness Code Coverage Generation worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "codeCoverageAgent"
+      ],
+      "yamlFile": "codeCoverageAgent.pipeline.yaml",
+      "stages": [
+        "Run Code Coverage Generation"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-aiCodeReviewAgent",
+      "name": "Code Review Sample",
+      "identifier": "aiCodeReviewAgentSample",
+      "summary": "Reusable pipeline sample for the Harness Code Review worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "beginner",
+      "availability": "coming_soon",
+      "agentIds": [
+        "aiCodeReviewAgent"
+      ],
+      "yamlFile": "aiCodeReviewAgent.pipeline.yaml",
+      "stages": [
+        "Run Code Review"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-complianceAuditAgent",
+      "name": "Compliance Audit Sample",
+      "identifier": "complianceAuditAgentSample",
+      "summary": "Reusable pipeline sample for the Harness Compliance Audit worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure",
+        "govern"
+      ],
+      "modules": [
+        "sto",
+        "platform"
+      ],
+      "triggers": [
+        "pipeline",
+        "scan_finding"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "complianceAuditAgent"
+      ],
+      "yamlFile": "complianceAuditAgent.pipeline.yaml",
+      "stages": [
+        "Run Compliance Audit"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors",
+        "prompt"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-databaseImpactAnalysis",
+      "name": "Database Impact Analysis Sample",
+      "identifier": "databaseImpactAnalysisSample",
+      "summary": "Reusable pipeline sample for the Harness Database Impact Analysis worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "databaseImpactAnalysis"
+      ],
+      "yamlFile": "databaseImpactAnalysis.pipeline.yaml",
+      "stages": [
+        "Run Database Impact Analysis"
+      ],
+      "runtimeInputs": [
+        "sql",
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-dockerfileCacheOptimizer",
+      "name": "Dockerfile Cache Optimization Sample",
+      "identifier": "dockerfileCacheOptimizerSample",
+      "summary": "Reusable pipeline sample for the Harness Dockerfile Cache Optimization worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "dockerfileCacheOptimizer"
+      ],
+      "yamlFile": "dockerfileCacheOptimizer.pipeline.yaml",
+      "stages": [
+        "Run Dockerfile Cache Optimization"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-triageAgent",
+      "name": "False Positive Triage Sample",
+      "identifier": "triageAgentSample",
+      "summary": "Reusable pipeline sample for the Harness False Positive Triage worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure"
+      ],
+      "modules": [
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "scan_finding"
+      ],
+      "complexity": "beginner",
+      "availability": "available",
+      "agentIds": [
+        "triageAgent"
+      ],
+      "yamlFile": "triageAgent.pipeline.yaml",
+      "stages": [
+        "Run False Positive Triage"
+      ],
+      "runtimeInputs": [
+        "llm_connector"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-featureCommitter",
+      "name": "Feature File Commit Sample",
+      "identifier": "featureCommitterSample",
+      "summary": "Reusable pipeline sample for the Harness Feature File Commit worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request",
+        "jira_issue"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "featureCommitter"
+      ],
+      "yamlFile": "featureCommitter.pipeline.yaml",
+      "stages": [
+        "Run Feature File Commit"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "repo_id"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-featureFlagCleanupAgent",
+      "name": "Feature Flag Cleanup Sample",
+      "identifier": "featureFlagCleanupAgentSample",
+      "summary": "Reusable pipeline sample for the Harness Feature Flag Cleanup worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "release",
+        "build"
+      ],
+      "modules": [
+        "fme"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "featureFlagCleanupAgent"
+      ],
+      "yamlFile": "featureFlagCleanupAgent.pipeline.yaml",
+      "stages": [
+        "Run Feature Flag Cleanup"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "feature_flag",
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-featureSpecPlanner",
+      "name": "Feature Spec Planning Sample",
+      "identifier": "featureSpecPlannerSample",
+      "summary": "Reusable pipeline sample for the Harness Feature Spec Planning worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "featureSpecPlanner"
+      ],
+      "yamlFile": "featureSpecPlanner.pipeline.yaml",
+      "stages": [
+        "Run Feature Spec Planning"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-iacDiscovery",
+      "name": "IaC Discovery Sample",
+      "identifier": "iacDiscoverySample",
+      "summary": "Reusable pipeline sample for the Harness IaC Discovery worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "iacm"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "iacDiscovery"
+      ],
+      "yamlFile": "iacDiscovery.pipeline.yaml",
+      "stages": [
+        "Run IaC Discovery"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-iacmCostRemediator",
+      "name": "IaCM Cost Remediation Sample",
+      "identifier": "iacmCostRemediatorSample",
+      "summary": "Reusable pipeline sample for the Harness IaCM Cost Remediation worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure",
+        "cost",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "iacm"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "advanced",
+      "availability": "available",
+      "agentIds": [
+        "iacmCostRemediator"
+      ],
+      "yamlFile": "iacmCostRemediator.pipeline.yaml",
+      "stages": [
+        "Run IaCM Cost Remediation"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors",
+        "recommendation",
+        "agent_name",
+        "pipeline_id",
+        "harness_base_url",
+        "harness_token_secret"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-iacmRemediationAgent",
+      "name": "IaCM Remediation Sample",
+      "identifier": "iacmRemediationAgentSample",
+      "summary": "Reusable pipeline sample for the Harness IaCM Remediation worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure",
+        "cost",
+        "build"
+      ],
+      "modules": [
+        "sto",
+        "iacm"
+      ],
+      "triggers": [
+        "pipeline",
+        "scan_finding"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "iacmRemediationAgent"
+      ],
+      "yamlFile": "iacmRemediationAgent.pipeline.yaml",
+      "stages": [
+        "Run IaCM Remediation"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "workspace",
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-featureIngester",
+      "name": "Jira Feature Ingestion Sample",
+      "identifier": "featureIngesterSample",
+      "summary": "Reusable pipeline sample for the Harness Jira Feature Ingestion worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "jira_issue"
+      ],
+      "complexity": "beginner",
+      "availability": "available",
+      "agentIds": [
+        "featureIngester"
+      ],
+      "yamlFile": "featureIngester.pipeline.yaml",
+      "stages": [
+        "Run Jira Feature Ingestion"
+      ],
+      "runtimeInputs": [
+        "llm_connector"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-manifestRemediatorAgent",
+      "name": "Kubernetes Manifest Remediation Sample",
+      "identifier": "manifestRemediatorAgentSample",
+      "summary": "Reusable pipeline sample for the Harness Kubernetes Manifest Remediation worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure",
+        "release",
+        "build"
+      ],
+      "modules": [
+        "cd"
+      ],
+      "triggers": [
+        "pipeline",
+        "failed_pipeline"
+      ],
+      "complexity": "beginner",
+      "availability": "available",
+      "agentIds": [
+        "manifestRemediatorAgent"
+      ],
+      "yamlFile": "manifestRemediatorAgent.pipeline.yaml",
+      "stages": [
+        "Run Kubernetes Manifest Remediation"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-mythosReadinessCollector",
+      "name": "Mythos Readiness Collection Sample",
+      "identifier": "mythosReadinessCollectorSample",
+      "summary": "Reusable pipeline sample for the Harness Mythos Readiness Collection worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure",
+        "test",
+        "release",
+        "monitor",
+        "govern",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "sto",
+        "cd",
+        "idp",
+        "platform"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "mythosReadinessCollector"
+      ],
+      "yamlFile": "mythosReadinessCollector.pipeline.yaml",
+      "stages": [
+        "Run Mythos Readiness Collection"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-outdatedTestUpdater",
+      "name": "Outdated Test Update Sample",
+      "identifier": "outdatedTestUpdaterSample",
+      "summary": "Reusable pipeline sample for the Harness Outdated Test Update worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "beginner",
+      "availability": "available",
+      "agentIds": [
+        "outdatedTestUpdater"
+      ],
+      "yamlFile": "outdatedTestUpdater.pipeline.yaml",
+      "stages": [
+        "Run Outdated Test Update"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-planExecutor",
+      "name": "Plan Execution Sample",
+      "identifier": "planExecutorSample",
+      "summary": "Reusable pipeline sample for the Harness Plan Execution worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "test",
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "planExecutor"
+      ],
+      "yamlFile": "planExecutor.pipeline.yaml",
+      "stages": [
+        "Run Plan Execution"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-prAuthor",
+      "name": "Pull Request Authoring Sample",
+      "identifier": "prAuthorSample",
+      "summary": "Reusable pipeline sample for the Harness Pull Request Authoring worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "prAuthor"
+      ],
+      "yamlFile": "prAuthor.pipeline.yaml",
+      "stages": [
+        "Run Pull Request Authoring"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "repo_id"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-regressionFixer",
+      "name": "Regression Repair Sample",
+      "identifier": "regressionFixerSample",
+      "summary": "Reusable pipeline sample for the Harness Regression Repair worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "regressionFixer"
+      ],
+      "yamlFile": "regressionFixer.pipeline.yaml",
+      "stages": [
+        "Run Regression Repair"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-specAuthor",
+      "name": "Spec Authoring Sample",
+      "identifier": "specAuthorSample",
+      "summary": "Reusable pipeline sample for the Harness Spec Authoring worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "specAuthor"
+      ],
+      "yamlFile": "specAuthor.pipeline.yaml",
+      "stages": [
+        "Run Spec Authoring"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-templateAuditor",
+      "name": "Template Audit Sample",
+      "identifier": "templateAuditorSample",
+      "summary": "Reusable pipeline sample for the Harness Template Audit worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "govern",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "platform"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "templateAuditor"
+      ],
+      "yamlFile": "templateAuditor.pipeline.yaml",
+      "stages": [
+        "Run Template Audit"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "mcp_connectors",
+        "model_name",
+        "harness_base_url"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-testDoctor",
+      "name": "Test Doctor Sample",
+      "identifier": "testDoctorSample",
+      "summary": "Reusable pipeline sample for the Harness Test Doctor worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "test",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "testDoctor"
+      ],
+      "yamlFile": "testDoctor.pipeline.yaml",
+      "stages": [
+        "Run Test Doctor"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name",
+        "mcp_connectors"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-automationFailureClassifier",
+      "name": "Test Failure Classification Sample",
+      "identifier": "automationFailureClassifierSample",
+      "summary": "Reusable pipeline sample for the Harness Test Failure Classification worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "test"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "beginner",
+      "availability": "available",
+      "agentIds": [
+        "automationFailureClassifier"
+      ],
+      "yamlFile": "automationFailureClassifier.pipeline.yaml",
+      "stages": [
+        "Run Test Failure Classification"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "model_name"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-verificationAnalyzer",
+      "name": "Verification Analysis Sample",
+      "identifier": "verificationAnalyzerSample",
+      "summary": "Reusable pipeline sample for the Harness Verification Analysis worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "release",
+        "monitor",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "cd"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "intermediate",
+      "availability": "available",
+      "agentIds": [
+        "verificationAnalyzer"
+      ],
+      "yamlFile": "verificationAnalyzer.pipeline.yaml",
+      "stages": [
+        "Run Verification Analysis"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-verificationEvaluator",
+      "name": "Verification Evaluation Sample",
+      "identifier": "verificationEvaluatorSample",
+      "summary": "Reusable pipeline sample for the Harness Verification Evaluation worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "release",
+        "monitor"
+      ],
+      "modules": [
+        "cd"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "advanced",
+      "availability": "available",
+      "agentIds": [
+        "verificationEvaluator"
+      ],
+      "yamlFile": "verificationEvaluator.pipeline.yaml",
+      "stages": [
+        "Run Verification Evaluation"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "target_pipeline_id",
+        "namespace",
+        "env_id",
+        "prometheus_connector_ref",
+        "elasticsearch_connector_ref",
+        "base_url"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-verificationImplementer",
+      "name": "Verification Implementation Sample",
+      "identifier": "verificationImplementerSample",
+      "summary": "Reusable pipeline sample for the Harness Verification Implementation worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "release",
+        "monitor",
+        "build"
+      ],
+      "modules": [
+        "cd"
+      ],
+      "triggers": [
+        "pipeline"
+      ],
+      "complexity": "advanced",
+      "availability": "available",
+      "agentIds": [
+        "verificationImplementer"
+      ],
+      "yamlFile": "verificationImplementer.pipeline.yaml",
+      "stages": [
+        "Run Verification Implementation"
+      ],
+      "runtimeInputs": [
+        "llm_connector",
+        "target_pipeline_id",
+        "namespace",
+        "env_id",
+        "prometheus_connector_ref",
+        "elasticsearch_connector_ref",
+        "base_url"
+      ],
+      "source": "generated_from_harness_global_template"
+    },
+    {
+      "id": "marketplace-avra",
+      "name": "Vulnerability Remediation Sample",
+      "identifier": "avraSample",
+      "summary": "Reusable pipeline sample for the Harness Vulnerability Remediation worker agent. Required agent settings remain Harness runtime inputs.",
+      "lifecycle": [
+        "secure",
+        "govern",
+        "build"
+      ],
+      "modules": [
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request",
+        "scan_finding"
+      ],
+      "complexity": "advanced",
+      "availability": "available",
+      "agentIds": [
+        "avra"
+      ],
+      "yamlFile": "avra.pipeline.yaml",
+      "stages": [
+        "Run Vulnerability Remediation"
+      ],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llm_connector",
+        "model_name",
+        "validation_pipeline_id",
+        "harness_base_url",
+        "harness_token_secret"
+      ],
+      "source": "generated_from_harness_global_template"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+pipeline:
+  name: Verification Evaluation Sample
+  identifier: verificationEvaluatorSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Verification Evaluation
+        identifier: Run_verificationEvaluator
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Verification Evaluation
+                  identifier: verificationEvaluator
+                  spec:
+                    agentName: verificationEvaluator
+                    agentSettings:
+                      llm_connector: <+input>
+                      target_pipeline_id: <+input>
+                      namespace: <+input>
+                      account_id: <+account.identifier>
+                      org_id: <+org.identifier>
+                      project_id: <+project.identifier>
+                      env_id: <+input>
+                      prometheus_connector_ref: <+input>
+                      elasticsearch_connector_ref: <+input>
+                      base_url: <+input>.default(https://app.harness.io)

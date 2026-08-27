@@ -1,0 +1,625 @@
+{
+  "agents": [
+    {
+      "id": "ca_dockerfilecacheoptimizernomcp",
+      "harnessAgentId": "ca_dockerfilecacheoptimizernomcp",
+      "name": "Dockerfile Cache Optimization",
+      "summary": "Restructures Dockerfiles for BuildKit layer caching without changing what the image installs, runs, or exposes. A downstream Run step commits and opens the PR.",
+      "description": "Forked from the Harness dockerfileCacheOptimizer template with MCP connectors optional. The agent only edits Dockerfiles and .dockerignore. Git, branch, and PR work happen in the pipeline Run step. No MCP is required for the happy path.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["build"],
+      "modules": ["ci"],
+      "triggers": ["pipeline", "pull_request"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Anthropic or Bedrock connector the agent calls for model access."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model your LLM connector can serve, such as a Claude model id or Bedrock inference profile ARN."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "MCP connector",
+          "kind": "connector",
+          "requirement": "not_needed",
+          "field": "mcp_connectors",
+          "note": "This fork makes MCP optional. The agent edits files on disk and needs no MCP server."
+        },
+        {
+          "key": "gitConnector",
+          "label": "Git connector with write access",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "pipeline codebase + Run step push",
+          "note": "The pipeline clones the repo and pushes the fix branch. The agent itself never runs git."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Git connector with write access to the repo"],
+      "keywords": [
+        "dockerfile",
+        "docker",
+        "cache",
+        "buildkit",
+        "layer",
+        "optimize",
+        "image",
+        "dockerignore",
+        "ci"
+      ]
+    },
+    {
+      "id": "ca_documentation_generator",
+      "harnessAgentId": "ca_documentation_generator",
+      "name": "Documentation Generator",
+      "summary": "Reads a cloned codebase and writes generated Markdown documentation under docs/, including README-style overview, APIs, and usage.",
+      "description": "A technical documentation agent. It discovers structure with Glob, reads entry points, greps public interfaces, and writes generated files marked so later runs can overwrite them without touching hand-written docs.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["plan", "build"],
+      "modules": ["ci", "idp"],
+      "triggers": ["pipeline", "pull_request"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Anthropic or Bedrock connector the agent calls for model access."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model your LLM connector can serve."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "MCP connector",
+          "kind": "connector",
+          "requirement": "not_needed",
+          "field": "mcp_connectors",
+          "note": "The agent reads the cloned repo and writes files locally. No MCP server required."
+        },
+        {
+          "key": "gitConnector",
+          "label": "Git connector with write access",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "pipeline codebase + Run step push",
+          "note": "Only needed if you commit the generated docs/ back to the repo."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Git connector with write access if you commit docs"],
+      "keywords": [
+        "docs",
+        "documentation",
+        "readme",
+        "api",
+        "generate",
+        "markdown",
+        "wiki"
+      ]
+    },
+    {
+      "id": "ca_testresultssummarizer",
+      "harnessAgentId": "ca_testresultssummarizer",
+      "name": "Test Results Summarizer",
+      "summary": "Turns raw test logs into a concise PASS/FAIL summary with failure list, coverage callouts, and an optional PR comment.",
+      "description": "Runs after a test step. Reads the test output file, reports totals and failures, and can post or update a PR comment. Designed around go test output but useful anywhere the log is parseable.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["test"],
+      "modules": ["ci"],
+      "triggers": ["failed_pipeline", "pull_request", "pipeline"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "test_output_path",
+        "test_exit_code",
+        "pipeline_url",
+        "branch",
+        "commit_sha",
+        "pr_number",
+        "repo_name"
+      ],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Anthropic or Bedrock connector the agent calls for model access."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model your LLM connector can serve."
+        },
+        {
+          "key": "testOutput",
+          "label": "Test output file",
+          "kind": "input",
+          "requirement": "required",
+          "field": "inputs.test_output_path",
+          "note": "A prior Run step must write test output to this path, plus an exit code output variable."
+        },
+        {
+          "key": "scmMcp",
+          "label": "SCM MCP connector",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "mcp_connectors",
+          "note": "Only needed to post or update the summary as a pull request comment."
+        },
+        {
+          "key": "scmToken",
+          "label": "SCM token secret",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "envVariables.HARNESS_TOKEN",
+          "note": "Paired with the SCM MCP connector for PR comments. Replace YOUR_SCM_TOKEN_SECRET with your secret id."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Test output file from a prior Run step", "Optional SCM MCP for PR comments"],
+      "keywords": [
+        "test",
+        "failure",
+        "summarize",
+        "coverage",
+        "go test",
+        "pr comment",
+        "ci"
+      ]
+    },
+    {
+      "id": "ca_test_and_security_verification",
+      "harnessAgentId": "ca_test_and_security_verification",
+      "name": "Unit Test Verification",
+      "summary": "Maps meaningful unit tests to repository services and components, checks a configurable structural coverage threshold, and interrupts the pipeline through Harness MCP when it fails.",
+      "description": "Analyzes a cloned repository to calculate the percentage of independently testable services and components with meaningful unit tests. It reports its evidence and can use Harness MCP to interrupt the current execution when coverage is below the configured threshold.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["test", "secure"],
+      "modules": ["ci"],
+      "triggers": ["pipeline", "pull_request"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName", "mcpConnectors", "coverageThreshold", "pipelineExecutionId"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "An account, org, or project AI connector available to this project."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model identifier supported by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Harness MCP connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcpConnectors",
+          "note": "Must expose the Harness pipeline execution interrupt or abort operation."
+        },
+        {
+          "key": "codebase",
+          "label": "Cloned repository",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.properties.ci.codebase",
+          "note": "The CI stage must clone the repository into /harness before the agent runs."
+        },
+        {
+          "key": "coverageThreshold",
+          "label": "Coverage threshold",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.coverageThreshold",
+          "note": "The percentage of testable services/components that must have meaningful unit tests; defaults to 90."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Harness MCP connector with permission to interrupt pipeline executions", "CI codebase repository"],
+      "keywords": ["unit test", "verification", "coverage", "quality gate", "abort pipeline", "component", "service", "ci"]
+    },
+    {
+      "id": "ca_docker_image_tag_inspector",
+      "harnessAgentId": "ca_docker_image_tag_inspector",
+      "name": "Docker Image Tag Inspector",
+      "summary": "Inspects every tag in a public Docker Hub repository, identifies tags older than a configurable threshold, and recommends cleanup candidates.",
+      "description": "Queries and paginates the public Docker Hub tags API, calculates exact tag ages, groups stale tags, and reports conservative cleanup and storage recommendations without deleting anything.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["secure"],
+      "modules": ["ci", "ccm"],
+      "triggers": ["pipeline", "scheduled"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName", "allowedDomains", "dockerRepository", "daysThreshold"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "An account, org, or project AI connector available to this project."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model identifier supported by the selected LLM connector."
+        },
+        {
+          "key": "dockerRepository",
+          "label": "Docker Hub repository",
+          "kind": "input",
+          "requirement": "required",
+          "field": "agentSettings.dockerRepository",
+          "note": "A public repository in namespace/name format."
+        },
+        {
+          "key": "daysThreshold",
+          "label": "Tag age threshold",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.daysThreshold",
+          "note": "Tags older than this many days are reported; defaults to 30."
+        },
+        {
+          "key": "dockerConnector",
+          "label": "Docker connector",
+          "kind": "connector",
+          "requirement": "not_needed",
+          "field": "agentSettings.dockerConnector",
+          "note": "The inspector uses Docker Hub's public API. Passing a connector identifier alone does not authenticate curl requests."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Public Docker Hub repository", "Network access to hub.docker.com"],
+      "keywords": ["docker", "docker hub", "image", "tag", "registry", "retention", "cleanup", "stale", "cost"]
+    },
+    {
+      "id": "ca_docker_tag_governance",
+      "harnessAgentId": "ca_docker_tag_governance",
+      "name": "Docker Tag Governance Agent",
+      "summary": "Evaluates Docker Hub tag retention rules, estimates storage costs, supports approval-gated cleanup, and protects designated release tags.",
+      "description": "Audits one or more Docker Hub repositories using protected patterns, retain-count, and age rules. It is report-only by default and requires a Docker Hub username and token secret before performing deletions.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["secure"],
+      "modules": ["ci", "ccm"],
+      "triggers": ["pipeline", "scheduled", "approval"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName", "allowedDomains", "dockerRepositories", "dockerUsername", "dockerHubToken", "cleanupMode", "retainCount", "protectedPatterns", "daysThreshold", "estimatedCostPerGB"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "An account, org, or project AI connector available to this project."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model identifier supported by the selected LLM connector."
+        },
+        {
+          "key": "dockerRepositories",
+          "label": "Docker Hub repositories",
+          "kind": "input",
+          "requirement": "required",
+          "field": "agentSettings.dockerRepositories",
+          "note": "One or more namespace/name repositories, separated by commas."
+        },
+        {
+          "key": "retentionPolicy",
+          "label": "Retention policy values",
+          "kind": "value",
+          "requirement": "required",
+          "field": "cleanupMode, retainCount, protectedPatterns, daysThreshold",
+          "note": "Report-only is the safe default. Set the retain count, protected patterns, and age threshold explicitly."
+        },
+        {
+          "key": "dockerUsername",
+          "label": "Docker Hub username",
+          "kind": "input",
+          "requirement": "optional",
+          "field": "agentSettings.dockerUsername",
+          "note": "Required when cleanupMode causes deletion; not needed for public report-only runs."
+        },
+        {
+          "key": "dockerHubToken",
+          "label": "Docker Hub token",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "agentSettings.dockerHubToken",
+          "note": "Required for deletion. Supply a Harness secret containing a scoped Docker Hub access token."
+        },
+        {
+          "key": "dockerConnector",
+          "label": "Docker connector",
+          "kind": "connector",
+          "requirement": "not_needed",
+          "field": "agentSettings.dockerConnector",
+          "note": "A connector identifier does not make credentials available to curl. Cleanup uses the explicit secret input instead."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Network access to hub.docker.com", "Docker Hub username and token secret for cleanup modes", "Approval group for approval-gated deletion"],
+      "keywords": ["docker", "docker hub", "tag", "governance", "retention", "cleanup", "delete", "approval", "registry", "storage", "cost"]
+    }
+  ],
+  "pipelines": [
+    {
+      "id": "dockerfile-cache-optimizer",
+      "name": "Dockerfile Cache Optimizer",
+      "identifier": "dockerfileCacheOptimizer",
+      "summary": "Clone a repo, run the Dockerfile cache agent, then commit Dockerfile and .dockerignore changes and push a branch.",
+      "runtimeInputs": ["repoName", "llmConnector", "modelName", "gitUserEmail", "gitUserName"],
+      "lifecycle": ["build"],
+      "modules": ["ci"],
+      "triggers": ["pipeline", "pull_request"],
+      "complexity": "intermediate",
+      "agentIds": ["ca_dockerfilecacheoptimizernomcp"],
+      "yamlFile": "dockerfile-cache-optimizer.pipeline.yaml",
+      "stages": [
+        "Clone codebase",
+        "Dockerfile Cache Optimizer",
+        "Commit and Push Branch"
+      ]
+    },
+    {
+      "id": "docs-generator",
+      "name": "Documentation Generator",
+      "identifier": "documentationGenerator",
+      "summary": "Clone a repo, generate docs/ with the documentation agent, then commit and push a docs branch.",
+      "runtimeInputs": ["repoName", "llmConnector", "modelName", "gitUserEmail", "gitUserName"],
+      "lifecycle": ["plan", "build"],
+      "modules": ["ci"],
+      "triggers": ["pipeline", "pull_request"],
+      "complexity": "beginner",
+      "agentIds": ["ca_documentation_generator"],
+      "yamlFile": "docs-generator.pipeline.yaml",
+      "stages": [
+        "Clone codebase",
+        "Documentation Agent",
+        "Commit Generated Docs"
+      ]
+    },
+    {
+      "id": "test-results-summarizer",
+      "name": "Test Results Summarizer",
+      "identifier": "testResultsSummarizer",
+      "summary": "Run your test command, ignore a failing test step, then summarize results with the test summarizer agent.",
+      "runtimeInputs": ["repoName", "llmConnector", "modelName", "testCommand"],
+      "lifecycle": ["test"],
+      "modules": ["ci"],
+      "triggers": ["failed_pipeline", "pull_request", "pipeline"],
+      "complexity": "intermediate",
+      "agentIds": ["ca_testresultssummarizer"],
+      "yamlFile": "test-results-summarizer.pipeline.yaml",
+      "stages": ["Clone codebase", "Run Tests", "Test Result Summarize"]
+    },
+    {
+      "id": "unit-test-verification",
+      "name": "Unit Test Verification",
+      "identifier": "unitTestVerification",
+      "summary": "Clone a repository, map services and components to meaningful unit tests, and interrupt the current execution through Harness MCP when structural coverage is below the threshold.",
+      "runtimeInputs": ["repoName", "build", "llmConnector", "modelName", "harnessMcpConnector", "coverageThreshold"],
+      "lifecycle": ["test", "secure"],
+      "modules": ["ci"],
+      "triggers": ["pipeline", "pull_request"],
+      "complexity": "intermediate",
+      "agentIds": ["ca_test_and_security_verification"],
+      "yamlFile": "unit-test-verification.pipeline.yaml",
+      "stages": ["Clone codebase", "Verify Unit Test Coverage", "Continue After Verification"],
+      "prerequisites": ["CI codebase repository", "LLM connector", "Harness MCP connector with pipeline execution interrupt permission"],
+      "configuration": [
+        {
+          "key": "repoName",
+          "label": "Repository and build",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.properties.ci.codebase",
+          "note": "Choose the repository and branch or pull request Harness CI should clone."
+        },
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "pipeline.variables.llmConnector",
+          "note": "Set this to an accessible account, org, or project AI connector reference."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.modelName",
+          "note": "Use a model supported by the selected LLM connector."
+        },
+        {
+          "key": "harnessMcpConnector",
+          "label": "Harness MCP connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "pipeline.variables.harnessMcpConnector",
+          "note": "Must allow the agent to find and invoke the current execution's interrupt operation."
+        },
+        {
+          "key": "coverageThreshold",
+          "label": "Coverage threshold",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.coverageThreshold",
+          "note": "Defaults to 90 percent structural service/component unit-test coverage."
+        }
+      ]
+    },
+    {
+      "id": "docker-image-tag-inspector",
+      "name": "Docker Image Tag Inspector",
+      "identifier": "dockerImageTagInspector",
+      "summary": "Inspect all tags in a public Docker Hub repository and report tags older than a configurable age without modifying the registry.",
+      "runtimeInputs": ["llmConnector", "modelName", "dockerRepository", "daysThreshold"],
+      "lifecycle": ["secure"],
+      "modules": ["ci", "ccm"],
+      "triggers": ["pipeline", "scheduled"],
+      "complexity": "beginner",
+      "agentIds": ["ca_docker_image_tag_inspector"],
+      "yamlFile": "docker-image-tag-inspector.pipeline.yaml",
+      "stages": ["Inspect Docker Tags"],
+      "prerequisites": ["LLM connector", "Public Docker Hub repository", "Network access to hub.docker.com"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "pipeline.variables.llmConnector",
+          "note": "Set this to an accessible account, org, or project AI connector reference."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.modelName",
+          "note": "Use a model supported by the selected LLM connector."
+        },
+        {
+          "key": "dockerRepository",
+          "label": "Docker Hub repository",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.dockerRepository",
+          "note": "Enter a public repository in namespace/name format."
+        },
+        {
+          "key": "daysThreshold",
+          "label": "Tag age threshold",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.daysThreshold",
+          "note": "Defaults to 30 days."
+        }
+      ]
+    },
+    {
+      "id": "docker-tag-governance",
+      "name": "Docker Tag Governance",
+      "identifier": "dockerTagGovernance",
+      "summary": "Analyze Docker Hub tag retention, optionally collect approval, and run guarded cleanup with explicit Docker Hub credentials.",
+      "runtimeInputs": ["llmConnector", "modelName", "dockerRepositories", "cleanupMode", "retainCount", "protectedPatterns", "daysThreshold", "estimatedCostPerGB", "dockerUsername", "dockerHubToken"],
+      "lifecycle": ["secure"],
+      "modules": ["ci", "ccm"],
+      "triggers": ["pipeline", "scheduled", "approval"],
+      "complexity": "advanced",
+      "agentIds": ["ca_docker_tag_governance"],
+      "yamlFile": "docker-tag-governance.pipeline.yaml",
+      "stages": ["Tag Analysis", "Approval Gate", "Execute Cleanup"],
+      "prerequisites": ["LLM connector", "Network access to hub.docker.com", "Docker Hub username and Harness token secret for cleanup", "At least one authorized approval user"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "pipeline.variables.llmConnector",
+          "note": "Set this to an accessible account, org, or project AI connector reference."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.modelName",
+          "note": "Use a model supported by the selected LLM connector."
+        },
+        {
+          "key": "dockerRepositories",
+          "label": "Docker Hub repositories",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.dockerRepositories",
+          "note": "Enter comma-separated repositories in namespace/name format."
+        },
+        {
+          "key": "retentionPolicy",
+          "label": "Retention policy values",
+          "kind": "value",
+          "requirement": "required",
+          "field": "cleanupMode, retainCount, protectedPatterns, daysThreshold",
+          "note": "The default mode is report-only. Review every protected pattern before enabling deletion."
+        },
+        {
+          "key": "dockerUsername",
+          "label": "Docker Hub username",
+          "kind": "input",
+          "requirement": "optional",
+          "field": "pipeline.variables.dockerUsername",
+          "note": "Required when cleanupMode triggers deletion."
+        },
+        {
+          "key": "dockerHubToken",
+          "label": "Docker Hub token",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "pipeline.variables.dockerHubToken",
+          "note": "Required when cleanupMode triggers deletion. Provide a scoped token stored as a Harness secret."
+        },
+        {
+          "key": "approvalGroup",
+          "label": "Approval group",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "approval_gate.approvers.userGroups",
+          "note": "The sample uses account._account_all_users. Replace it with a narrower authorized user group for production."
+        }
+      ]
+    }
+  ]
+}

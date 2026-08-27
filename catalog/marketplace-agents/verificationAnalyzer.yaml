@@ -1,0 +1,399 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      default:
+        - harness_mcp
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify the MCP connector refs to mount. Include a Harness MCP connector so the agent can read pipelines and monitored services.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - mcp_connectors
+  id: verificationAnalyzer
+  name: Verification Analysis
+  description: AI agent that analyzes application source code and Kubernetes manifests to discover Prometheus metrics and log signals, emitting a grounded verification configuration for Continuous Verification.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Analyze Code
+          if: <+Always>
+          id: analyzeCode
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_TASK: |
+                You are a source code analysis agent specializing in observability. Your job is to examine application source code and produce a verification configuration that describes all discoverable metrics and log signals.
+
+                ## Task
+
+                Analyze the source code in the current working directory. For each service you find:
+
+                1. Identify the programming language and framework
+                2. Find all Prometheus metric definitions (look for metric registration patterns)
+                3. Find all structured logging (JSON logs, log frameworks with level/message fields)
+                4. Determine the metrics endpoint path (e.g. /metrics, /actuator/prometheus)
+                5. Generate PromQL queries suitable for canary/baseline comparison
+                6. Generate Elasticsearch queries for error log detection
+
+                ## What to look for
+
+                ### Prometheus metrics
+
+                Search for metric registration patterns by language:
+
+                **Node.js (prom-client)**
+                - `new client.Counter(...)`, `new client.Histogram(...)`, `new client.Gauge(...)`, `new client.Summary(...)`
+                - `client.collectDefaultMetrics(...)` — indicates process-level metrics are enabled
+                - Look at label names to understand available dimensions
+
+                **Java (micrometer / simpleclient)**
+                - `Counter.build()...register()`, `Histogram.build()...register()`, `Gauge.build()...register()`
+                - `@Timed`, `@Counted` annotations
+                - `MeterRegistry` bean usage
+                - `DefaultExports.initialize()` — indicates JVM metrics
+                - Spring Boot 2.x+ with Micrometer + `micrometer-registry-prometheus` → auto-emits `http_server_requests_seconds_*` (with `uri`, `method`, `status` labels)
+                - Spring Boot 1.x with `simpleclient_spring_boot` (legacy `prometheus-simpleclient` integration) → auto-emits a different, much older naming convention. The metric name itself encodes the request endpoint (slashes become underscores):
+                  - `request_duration_seconds_bucket` / `_count` / `_sum` (no `http_` prefix; one set of series across all endpoints, distinguished by the implicit `path` part of the name in some encodings — verify against `/metrics` output)
+                  - `counter_status_<code>_<endpoint>` (e.g. `counter_status_200_health`, `counter_status_500_cart_itemId`)
+                  - `gauge_response_<endpoint>` (e.g. `gauge_response_health`, `gauge_response_cart_itemId`)
+                  - `httpsessions_active`, `httpsessions_max`
+                  Detect this variant by the presence of `simpleclient_spring_boot` (or older `io.prometheus:simpleclient_*`) on the classpath, Spring Boot 1.x in `pom.xml`/`build.gradle`, or `@EnablePrometheusEndpoint`/`@EnableSpringBootMetricsCollector` annotations. When you see this combination, do NOT generate queries against `http_requests_total` or `http_request_duration_seconds_*` — those names do not exist. Generate queries against the legacy names instead.
+
+                **Go (prometheus/client_golang)**
+                - `prometheus.NewCounterVec(...)`, `prometheus.NewHistogramVec(...)`, `prometheus.NewGaugeVec(...)`
+                - `promauto.NewCounterVec(...)` etc.
+                - `promhttp.Handler()` registration
+                - Go services typically pick their **own** metric names; do NOT assume Node.js conventions like `http_request_duration_seconds` or `http_requests_total` exist. Read the actual `prometheus.NewHistogram(prometheus.HistogramOpts{Name: "..."})` literal to learn the real name (commonly `request_duration_seconds_bucket`, no `http_` prefix). If no HTTP middleware metric is registered explicitly, none exists — `client_golang` does not auto-instrument HTTP handlers.
+
+                **Python (prometheus_client)**
+                - `Counter(...)`, `Histogram(...)`, `Gauge(...)`, `Summary(...)`
+
+                For each metric found, note:
+                - The metric name
+                - The help text / description
+                - The label names
+                - The file and line where it's defined
+                - What it measures (inferred from name, help text, and usage context)
+
+                ### Grounding rule — evidence is mandatory, not optional
+
+                Every metric in your output MUST include a populated `evidence` object with the literal source lines where the metric is registered AND observed. This is a hard schema requirement, not a guideline.
+
+                The contract:
+                1. **`registration_file` / `registration_line` / `registration_snippet`** must point to a real line of source code that calls a metric constructor (`prometheus.NewCounterVec`, `Counter.build()`, `new client.Histogram`, `Counter(...)`, etc.) OR explicitly registers a framework auto-instrumentation (e.g. `DefaultExports.initialize()`, `collectDefaultMetrics()` with the matching prefix).
+                2. **`observation_file` / `observation_line` / `observation_snippet`** must point to a real line of source code that calls `.Observe()`, `.Inc()`, `.Set()`, `.observe()`, `.inc()`, `.set()`, `.labels(...).inc()`, or registers middleware that wraps request handlers (e.g. `app.use(metricsMiddleware)`, `promhttp.InstrumentHandlerDuration`).
+                3. The metric name in `prometheusMetric` MUST appear verbatim in `registration_snippet`. If the registration uses a variable for the name, trace it back to the literal string and quote that line instead.
+
+                If you cannot fill in the evidence object truthfully, DO NOT EMIT THE METRIC. Emitting a metric with fabricated, empty, or vague evidence is the worst possible failure mode — the downstream Verify step will silently report "no data" for hallucinated metrics, masking real regressions.
+
+                Forbidden behaviors (these have happened in past runs):
+                - Inventing plausible-sounding business metrics like `orders_created_total`, `order_processing_duration_seconds`, `orders_upstream_call_errors_total`, `payment_failed_total`, `cart_items_added_total` from the service name. If you find yourself generating a metric named after the service's domain, STOP — verify the literal registration exists in the source first.
+                - Assuming Spring Boot 2.x metric names (`http_server_requests_seconds_*`) for a Spring Boot 1.x app, or vice versa. Check `pom.xml` / `build.gradle` for `simpleclient_spring_boot` (1.x) vs `micrometer-registry-prometheus` (2.x).
+                - Assuming Node.js `prom-client` naming conventions (`http_request_duration_seconds`, `http_requests_total`) apply to Java or Go services. They do not.
+                - Copying example metric names from this prompt into the output. The examples in this prompt are illustrative; only emit metrics whose registration you have located in the actual code being analyzed.
+
+                Self-check before emitting any metric: "Can I quote the exact line where this metric is registered? Can I quote the exact line where it is observed?" If either answer is no, skip the metric.
+
+                ### When to set `requiresVerification: true`
+
+                Set `requiresVerification: true` for any metric where you have evidence of registration and observation but cannot fully confirm one or more of:
+                - The set of label values the application actually produces (e.g. you see a `status_code` label but cannot confirm 5xx is ever set)
+                - Whether the metric is exposed on a scrape endpoint that Prometheus actually scrapes (no `prometheus.io/scrape: "true"` annotation found, OR no manifest available to check)
+                - Whether the metric prefix from `collectDefaultMetrics({prefix: '...'})` applies to a specific default metric you've selected
+
+                Otherwise set `requiresVerification: false`. The downstream pipeline surfaces these flags so reviewers can prioritize manual checks.
+
+                ### Label selectors — match what's actually in the labels
+
+                For each query, the label selector must use only labels that are actually attached to that metric. To verify:
+                - The Prometheus client library always attaches labels declared at metric construction time. Read the constructor call (`NewHistogramVec(opts, []string{"method","path","status_code"})` etc.) — those are the only label names available on that metric.
+                - Pod-level labels (`app`, `kubernetes_namespace`, `kubernetes_pod_name`) are added by Prometheus during scrape via the Kubernetes SD relabel config; assume they exist on every metric.
+                - Do NOT add a `service="<name>"` selector unless the source explicitly registers a `service` label OR the metric library is configured to attach one (e.g. via `prom-client`'s `defaultLabels`).
+                - For error-rate queries that filter on `status_code=~"5.."`: only emit this if the metric's labels include `status_code` AND there's evidence the application actually surfaces 5xx codes (look for `res.status(500)`, exception handlers, etc.). If the only observed status codes in the source are 2xx/4xx, an error-rate query filtered on 5xx will be permanently flat — generate an alternate "non-2xx rate" query (`status_code!~"2.."`) instead, or skip the metric.
+
+                ### Structured logs
+
+                Search for logging patterns:
+
+                - JSON logging libraries (winston, bunyan, pino, logback JSON encoder, zap, zerolog, logrus)
+                - Log level usage (ERROR, WARN, INFO)
+                - Structured fields attached to log entries
+                - Log shipping configuration (Elasticsearch appenders, fluentd/fluent-bit configs, HTTP log shipping)
+
+                For each log source, note:
+                - The log format (JSON fields available)
+                - Where logs are shipped (index name, endpoint)
+                - How to identify error conditions
+                - The timestamp format
+                - The field that identifies the service instance (hostname, pod name)
+
+                ## Output format
+
+                Produce a single JSON document with this schema:
+
+                ```json
+                {
+                  "generated_by": "analyze_agent",
+                  "generated_at": "<ISO 8601 timestamp>",
+                  "repository": "<repo name or path>",
+                  "services": [
+                    {
+                      "name": "<service name>",
+                      "language": "<language>",
+                      "framework": "<framework if detectable>",
+                      "metrics_endpoint": "<path where metrics are served>",
+                      "metrics": [
+                        {
+                          "identifier": "<snake_case unique id>",
+                          "metricName": "<human readable name>",
+                          "prometheusMetric": "<raw metric name as registered>",
+                          "type": "<counter|histogram|gauge|summary>",
+                          "labels": ["<label1>", "<label2>"],
+                          "query": "<PromQL query for canary analysis>",
+                          "isManualQuery": "<true|false — see rules below>",
+                          "aggregation": "<avg|sum|min|max — the outer aggregation function used in the query>",
+                          "serviceFilter": [
+                            {"labelName": "<label_name>", "labelValue": "<service_name>"}
+                          ],
+                          "envFilter": [
+                            {"labelName": "kubernetes_namespace", "labelValue": "${namespace}"}
+                          ],
+                          "category": "<Errors|Performance|Infrastructure>",
+                          "metricType": "<ERROR|RESP_TIME|THROUGHPUT|INFRA|OTHER>",
+                          "thresholdType": "<ACT_WHEN_HIGHER|ACT_WHEN_LOWER>",
+                          "serviceInstanceFieldName": "kubernetes_pod_name",
+                          "groupName": "metrics",
+                          "evidence": {
+                            "registration_file": "<relative path to source file containing the metric registration>",
+                            "registration_line": "<line number of the registration call>",
+                            "registration_snippet": "<the literal source line, copy-pasted verbatim>",
+                            "observation_file": "<relative path to source file containing an Observe/Inc/Set call or wrapping middleware>",
+                            "observation_line": "<line number of the observation>",
+                            "observation_snippet": "<the literal source line, copy-pasted verbatim>"
+                          },
+                          "requiresVerification": "<true|false — true if any aspect of the metric (label names, scrape target, value range) could not be confirmed from source>",
+                          "rationale": "<why this metric matters>"
+                        }
+                      ],
+                      "logs": [
+                        {
+                          "identifier": "<snake_case unique id>",
+                          "name": "<human readable name>",
+                          "query": "<Elasticsearch query string>",
+                          "index": "<elasticsearch index pattern>",
+                          "serviceInstanceField": "['_source'].['hostname']",
+                          "timestampField": "['_source'].['@timestamp']",
+                          "timestampFormat": "<java SimpleDateFormat pattern>",
+                          "messageField": "['_source'].['message']",
+                          "rationale": "<why this log query matters and where you found the logging pattern>"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                ```
+
+                ## Rules for generating queries
+
+                ### PromQL queries
+
+                - Use `rate(...[5m])` for counters
+                - Use `histogram_quantile(0.99, rate(..._bucket[5m]))` for latency percentiles from histograms
+                - Use `avg(rate(..._sum[5m]) / rate(..._count[5m]))` for average duration from histograms
+                - Always include `kubernetes_namespace="${namespace}"` as a label selector in every query — the downstream Implement Agent resolves this placeholder at deploy time
+                - Additionally include `app="<service_name>"` or `service="<service_name>"` if the metric uses that label for service identification
+                - For error rates derived from counters with status labels, filter on `status=~"5.."` or `status="failed"` depending on the label values
+
+                ### Framework-specific metric labels
+
+                Different frameworks produce different label names on their metrics. You MUST determine the correct service-identifying label by reading the actual metric registration code — do not guess.
+
+                **How to determine the service label:**
+                1. Find where the metric is registered (e.g., `Counter.build("name", "help").labelNames(...)` or `new Histogram({labelNames: [...]})`)
+                2. Read the exact label names from the registration call
+                3. Find where the label values are set (e.g., `.labels(value)`, `.observe({labels})`, interceptor code)
+                4. Use those exact label names and values in your PromQL queries
+
+                **Common patterns by framework (use as hints, but always verify against actual code):**
+
+                | Framework | Typical service label | Typical HTTP labels | Notes |
+                |-----------|----------------------|--------------------|---------|
+                | Go promhttp (InstrumentHandlerDuration etc.) | none built-in | `code`, `method`, `handler` | No service label unless manually added |
+                | Go custom middleware | varies — read the code | read from `prometheus.Labels{...}` | Often uses `name`, `service`, or no service label |
+                | Java micrometer (Spring Boot 2.x Actuator) | `application` | `method`, `uri`, `status`, `outcome` | Metric name: `http_server_requests_seconds` |
+                | Java simpleclient_spring_boot (Spring Boot 1.x) | none | encoded into the metric name | Legacy: `request_duration_seconds_*`, `counter_status_<code>_<endpoint>`, `gauge_response_<endpoint>` — no `http_` prefix |
+                | Java Prometheus simpleclient (custom) | read from `.labelNames(...)` | typically `method`, `path`, `status_code` | Custom interceptors define their own labels |
+                | Node.js prom-client | read from `labelNames: [...]` | varies per registration | No standard — each app defines its own |
+                | Python prometheus_client | read from `labelnames=[...]` | varies | No standard |
+
+                **Critical rules:**
+                - Do NOT assume `service="<name>"` exists on a metric unless you see `"service"` in the label names of the registration code
+                - If a metric has no service-identifying label, use `app="<service_name>"` — this label is added by Kubernetes pod metadata relabeling in most Prometheus scrape configs
+                - If you see a label like `name` used as the service identifier (common in Go microservices), use `name="<service_name>"`
+                - The `serviceFilter` array in the output should reflect the actual label(s) you would use to filter to this specific service
+
+                **Example — Go service with custom labels:**
+                If you find: `prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "request_duration_seconds"}, []string{"service", "status_code"})`
+                Then:
+                - The `service` label exists on this metric — use it
+                - The metric name is `request_duration_seconds`, NOT `http_request_duration_seconds`
+                - Query: `histogram_quantile(0.99, rate(request_duration_seconds_bucket{service="checkout", kubernetes_namespace="${namespace}"}[5m]))`
+
+                **Example — Java Spring Boot 2.x (Micrometer):**
+                Auto-emitted by Spring Boot Actuator with `micrometer-registry-prometheus`:
+                - Metric: `http_server_requests_seconds_*` with labels `method`, `uri`, `status`, `outcome`, `application`
+                - Query: `histogram_quantile(0.99, rate(http_server_requests_seconds_bucket{application="checkout", kubernetes_namespace="${namespace}"}[5m]))`
+
+                **Example — Java Spring Boot 1.x (legacy simpleclient_spring_boot):**
+                Metric names encode the endpoint; do NOT use `http_*` names:
+                - 5xx rate per endpoint: `rate(counter_status_500_cart_itemId{kubernetes_namespace="${namespace}"}[5m])`
+                - Latency for `/health`: `gauge_response_health{kubernetes_namespace="${namespace}"}`
+                - Total latency histogram: `histogram_quantile(0.99, rate(request_duration_seconds_bucket{kubernetes_namespace="${namespace}"}[5m]))`
+
+                **Example — Node.js with custom label names:**
+                If you find: `new Histogram({name: 'http_request_duration_seconds', labelNames: ['service', 'method', 'path', 'status_code']})`
+                Then:
+                - The `service` label exists — use it
+                - Query: `histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{service="web", kubernetes_namespace="${namespace}"}[5m]))`
+
+                ### Metric name accuracy
+
+                The metric name used in PromQL must match exactly what's registered in the code:
+                - If the code registers `request_duration_seconds`, do NOT write `http_request_duration_seconds` in the query
+                - If the code uses a prefix (e.g., `collectDefaultMetrics({prefix: 'frontend_'})`), include that prefix in metric names (e.g., `frontend_nodejs_eventloop_lag_seconds`)
+                - Histogram metrics automatically get `_bucket`, `_sum`, and `_count` suffixes — reference the base name without suffix when describing the metric, but use the correct suffix in queries
+
+                ### isManualQuery
+
+                Set `isManualQuery` based on query complexity:
+                - **`false`** — only for simple queries matching the pattern `aggregation(metric_name{label filters})`. Harness can reconstruct these from the `aggregation`, `serviceFilter`, and `envFilter` fields.
+                - **`true`** — for any query using `rate()`, `histogram_quantile()`, nested functions, `by` clauses, arithmetic operators, or multiple sub-expressions. Harness cannot reconstruct these and must use the raw query string as-is.
+
+                In practice, most useful queries (counters need `rate()`, histograms need `histogram_quantile()`) will be `isManualQuery: true`. Only raw gauge averages like `avg(my_gauge{filters})` qualify for `false`.
+
+                ### Category assignment
+
+                Harness CV only accepts these three category values: `Performance`, `Errors`, `Infrastructure`.
+                Valid metricType values: `RESP_TIME`, `THROUGHPUT`, `ERROR`, `INFRA`, `OTHER`, `APDEX`.
+
+                Use the following mappings:
+
+                - **Errors** (category: Errors, metricType: ERROR, thresholdType: ACT_WHEN_HIGHER): error counters, 5xx rates, failed operation counts
+                - **Performance** (category: Performance, metricType: RESP_TIME, thresholdType: ACT_WHEN_HIGHER): latency histograms, duration metrics
+                - **Throughput** (category: Performance, metricType: THROUGHPUT, thresholdType: ACT_WHEN_LOWER): request rate, operations per second — a drop is bad
+                - **Infrastructure** (category: Infrastructure, metricType: INFRA, thresholdType: ACT_WHEN_HIGHER): queue depth, in-flight requests, connection pool usage, memory/CPU gauges
+                - **Other** (category: Infrastructure, metricType: OTHER, thresholdType: ACT_WHEN_HIGHER): any metric that doesn't clearly fit the above — business metrics, custom counters, etc.
+
+                Do NOT use `Custom`, `Saturation`, or `Throughput` as category values — the Harness API will reject them.
+                Do NOT use `CUSTOM` as a metricType — use `OTHER` instead.
+
+                ### Elasticsearch queries
+
+                - Use Lucene query syntax
+                - Filter on `level: ERROR` for error detection
+                - Include service name filter if the log schema has a service field
+                - If the logging ships to a known index, use that; otherwise use the service name as the index pattern
+
+                ## What NOT to do
+
+                - Do not invent metrics that don't exist in the source code
+                - Do not assume a framework's auto-instrumentation exists unless you see evidence (dependency, configuration, annotation). In particular, do not assume Node.js / `prom-client` naming conventions (`http_request_duration_seconds`, `http_requests_total`, `http_response_size_bytes`, `http_inflight_requests`) apply to Java or Go services — those names only exist when the application explicitly registered them.
+                - Do not hardcode namespace values — always use `${namespace}` as the placeholder in `kubernetes_namespace` label selectors
+                - Do not include metrics that are purely internal/debug with no operational significance
+                - Do not produce recommendations for services where you find zero observability signals — skip them with a note
+                - Do not emit a query selector that filters on a label the metric doesn't carry, or on a label *value* that the application has no code path to produce (e.g. `status_code=~"5.."` when the service never surfaces 5xx). Such queries return zero series at runtime and silently mask regressions.
+                - Do not assume a `service` label exists on metrics — verify it from the metric registration code
+                - Do not use label names that are not present in the metric's `labelNames` definition
+
+                ## Manifest grounding — verify the service is actually scraped
+
+                The pipeline that runs this agent clones a separate deploy repo into the working directory in addition to the source repo. Expected layout:
+
+                ```
+                /harness/                              # primary source repo
+                  automation/<service>-src/            # source code per service
+                  ...
+                /harness/<deploy-repo>/                # second clone — Kubernetes manifests (Helm-templated)
+                  <service>/deployment.yaml
+                  <service>/service.yaml
+                  <service>/values.yaml
+                  ...
+                ```
+
+                If the deploy repo subdirectory is not present, list the working directory and look for any of: `manifests/`, `k8s/`, `kubernetes/`, `deploy/`, or any directory containing `deployment.yaml` files with `apiVersion: apps/v1`. If you genuinely cannot find any Kubernetes manifests, proceed with source-only grounding and set `requiresVerification: true` on all emitted metrics with a rationale noting "manifests not available".
+
+                ### Reading Helm-templated YAML
+
+                Manifests in the deploy repo contain Helm template tokens (`{{ .Values.X }}`, `{{- if ... }}`, etc.). Do NOT try to render them — read them as plain text. The fields that matter for observability grounding are typically **static literals** in this repo:
+
+                - `prometheus.io/scrape`, `prometheus.io/port`, `prometheus.io/path` annotations — static
+                - Pod labels (`name`, `app`) — static
+                - Container `name`, `ports.containerPort` — static
+
+                When you do encounter a templated value (e.g. `image: {{ .Values.image }}`), look up `<service>/values.yaml` in the same directory to find the corresponding key. If the resolved value is itself a Harness expression like `<+artifact.image>` (resolved at deploy time, not analyze time), record what you found and move on — image-tag-based framework version inference is best-effort.
+
+                ### What to extract from each service's manifests
+
+                For each service in the source repo, find the matching directory in `<deploy-repo>/<service>/`. Read both `deployment.yaml` and `service.yaml` (annotations may live on either):
+
+                1. **Scrape annotations** on the Deployment's pod template (`spec.template.metadata.annotations`) OR the Service's metadata (`metadata.annotations`):
+                  - `prometheus.io/scrape: 'true'` — required for the service to be scraped at all
+                  - `prometheus.io/port: '<port>'` — the metrics port
+                  - `prometheus.io/path: '<path>'` — the metrics endpoint path. NOTE: this is sometimes `/prometheus` or `/actuator/prometheus`, not always `/metrics`. Always read it from the manifest rather than assuming.
+                2. **Pod labels.** Read `spec.template.metadata.labels` on the Deployment. In this repo, services typically have BOTH `name: <service>` and `app: <service>` labels. Prometheus pod-scrape relabeling makes both available on the scraped series. Use the value you actually find — not a guess based on directory name. If both `name` and `app` are present and equal, prefer `app` in your `serviceFilter` (it's the more common Prometheus convention).
+                3. **Container image tag** for framework version inference: read `spec.template.spec.containers[0].image`. If it's templated (`{{ .Values.image }}`), check `values.yaml`. If still unresolvable (e.g. `<+artifact.image>`), fall back to `pom.xml` / `build.gradle` / `package.json` in the source repo for framework version.
+
+                ### When manifest grounding fails
+
+                If a service has metrics registered in source but NO `prometheus.io/scrape: 'true'` annotation found on either its Deployment or Service:
+                - Set `requiresVerification: true` on every metric for that service.
+                - Add a note in the metric's `rationale` that scraping could not be confirmed from manifests.
+
+                If a service has no matching directory in the deploy repo (whichever deploy repo is cloned):
+                - Same treatment: emit metrics from source-only grounding, set `requiresVerification: true`.
+
+                ## Approach
+
+                1. First, scan the directory structure to understand the repo layout (monorepo vs single service, language detection).
+                2. For each service directory, search for metric registration patterns using grep/find. Open the files and read them — do not infer metric names from the framework alone.
+                3. **Read the exact label names from each metric registration** — this is critical for query accuracy.
+                4. For each candidate metric, locate an observation site (`Observe`/`Inc`/`Set` or wrapping middleware). If none exists, the metric is dead code — skip it.
+                5. Check the Kubernetes manifests for scrape annotations and the actual `app` label value (see "Manifest grounding" above).
+                6. Check for logging configuration (logback.xml, winston config, zap initialization).
+                7. For every metric you intend to emit, fill in the `evidence` object truthfully — copy the literal source lines into `registration_snippet` and `observation_snippet`. If you cannot, drop the metric.
+                8. Assemble the output JSON.
+                9. Write the output to `verify-config.json` in the working directory.
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>

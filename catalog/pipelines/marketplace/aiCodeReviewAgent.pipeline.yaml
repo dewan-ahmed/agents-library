@@ -1,0 +1,34 @@
+pipeline:
+  name: Code Review Sample
+  identifier: aiCodeReviewAgentSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Code Review
+        identifier: Run_aiCodeReviewAgent
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Code Review
+                  identifier: aiCodeReviewAgent
+                  spec:
+                    agentName: aiCodeReviewAgent
+                    agentSettings: {}

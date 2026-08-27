@@ -1,0 +1,33 @@
+pipeline:
+  name: Compliance Audit Sample
+  identifier: complianceAuditAgentSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Compliance Audit
+        identifier: Run_complianceAuditAgent
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Compliance Audit
+                  identifier: complianceAuditAgent
+                  spec:
+                    agentName: complianceAuditAgent
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>
+                      mcp_connectors: <+input>
+                      prompt: <+input>

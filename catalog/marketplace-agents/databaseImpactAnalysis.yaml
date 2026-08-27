@@ -1,0 +1,132 @@
+template:
+  inputs:
+    sql:
+      type: string
+      label: SQL
+      required: true
+      ui:
+        component: textarea
+        tooltip: Enter the SQL migration or change script to analyze for zero-downtime safety.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      default: account.harnessAnthropic
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      default: global.anthropic.claude-haiku-4-5-20251001-v1:0
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier or inference-profile ARN.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount for additional schema or database context, if needed.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - sql
+    - llm_connector
+    - model_name
+    - variant: more
+      items:
+        - mcp_connectors
+  id: databaseImpactAnalysis
+  name: Database Impact Analysis
+  description: AI agent that analyzes SQL changes for zero-downtime safety and reports a pass or fail verdict as an output variable.
+  version: 1
+  author: harness
+  agent:
+    step:
+      group:
+        steps:
+          - name: Analyze Database Impact
+            if: <+Always>
+            id: analyzeDatabaseImpact
+            run:
+              container:
+                image: harness/harness-ai-agent:0.1.71
+                connector: account.harnessImage
+              env:
+                PLUGIN_MAX_TURNS: "150"
+                PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+                ANTHROPIC_MODEL: ${{inputs.model_name}}
+                PLUGIN_MCP_FORMAT: harness
+                PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+                PLUGIN_TASK: |
+                  You are a database impact analysis agent. Your job is to review a
+                  SQL change and decide whether it is safe to run against a
+                  production database with zero downtime.
+
+                  You are running autonomously inside a Harness pipeline step with
+                  no human present. Complete the analysis end-to-end without asking
+                  for confirmation or input.
+
+                  ## SQL to analyze
+
+                  <+inputs.SQL>
+
+                  ## Safety criteria
+
+                  The SQL must:
+                  1. Be backward compatible — the old and new versions of the
+                    application can run simultaneously against the database and
+                    are guaranteed to always see the same data.
+                  2. Preserve database consistency and integrity.
+                  3. Be performant.
+
+                  The SQL must not:
+                  1. Create locks that could last more than 500ms.
+                  2. Cause an outage when run in production.
+                  3. Cause data loss.
+                  4. Perform any operation that could not be undone.
+
+                  ## Output
+
+                  Write the output variable VALIDATION_STATUS to $DRONE_OUTPUT:
+                    echo "VALIDATION_STATUS=PASS" >> "$DRONE_OUTPUT"
+                  or
+                    echo "VALIDATION_STATUS=FAIL" >> "$DRONE_OUTPUT"
+                  depending on whether the SQL is safe to run.
+
+                  Also write a SUMMARY output variable to $DRONE_OUTPUT containing a
+                  concise explanation of what the change does and why it is (or is
+                  not) safe to run. Do not discuss anything else in the summary.
+                  Escape newlines so it is a single line, e.g.:
+                    echo "SUMMARY=<your summary here>" >> "$DRONE_OUTPUT"
+
+                  This step always exits 0 regardless of the verdict — the
+                  VALIDATION_STATUS output variable is what downstream pipeline
+                  steps use to decide whether to proceed.
+  output:
+    - name: VALIDATION_STATUS
+      alias: VALIDATION_STATUS
+    - name: SUMMARY
+      alias: SUMMARY

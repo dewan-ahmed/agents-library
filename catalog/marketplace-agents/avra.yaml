@@ -1,0 +1,184 @@
+template:
+  inputs:
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      default: global.anthropic.claude-opus-4-6-v1
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier used for vulnerability remediation.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Optionally specify a list of MCP connector refs to mount. Include a Harness MCP connector to look up the validation pipeline execution; if none is provided, the agent falls back to the Harness API.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    validation_pipeline_id:
+      type: string
+      label: Validation Pipeline ID
+      required: true
+      ui:
+        tooltip: Enter the identifier of the pipeline that re-scans fix pull requests to confirm the vulnerability is resolved.
+        placeholder: vulnValidationPipeline
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    max_prs:
+      type: number
+      label: Max PRs
+      default: 1
+      ui:
+        tooltip: Enter the maximum number of fix pull requests to create per run.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_base_url:
+      type: string
+      label: Harness Base URL
+      required: true
+      default: https://app.harness.io
+      ui:
+        tooltip: Enter the Harness base URL used by the remediation API operations.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_token_secret:
+      type: secret
+      label: Harness Token Secret
+      required: true
+      description: "Harness secret holding the API key (PAT) used to read scan results, open fix PRs, and create exemptions."
+      ui:
+        tooltip: Select the Harness secret that stores the API key for remediation operations.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - title: Agent Configuration
+      items:
+        - llm_connector
+        - model_name
+        - mcp_connectors
+    - title: Remediation Inputs
+      items:
+        - validation_pipeline_id
+        - max_prs
+    - title: Harness Scope
+      items:
+        - harness_base_url
+        - harness_token_secret
+  id: avra
+  name: Vulnerability Remediation
+  description: AI agent that closes the gap between vulnerability detection and verified remediation by opening confidence-scored fix pull requests and filing auditable exemptions for unfixable findings.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: AVRA
+          if: <+Always>
+          id: avra
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              PLUGIN_MAX_TURNS: "100"
+              PLUGIN_ALLOWED_TOOLS: Read,Write,Edit,Bash
+              PLUGIN_OUTPUT_FILE: /harness/.agent/output/remediation-report.json
+              PLUGIN_TASK: |
+                  You are the Vulnerability Auto-Remediator agent. Your job is to
+                  close the gap between vulnerability scanners and code fixes for
+                  the artifacts scanned in the current pipeline execution.
+
+                  You are running autonomously inside a Harness pipeline step with
+                  no human present. Complete all steps end-to-end without asking
+                  for confirmation.
+
+                  ## Steps
+
+                  1. **Setup**: `mkdir -p /harness/.agent/{input,work,output}` then `cd /harness/.claude/skills/vuln_remediate/scripts`
+                  2. **Fetch**: `./01-fetch-sto-issues.sh /harness/.agent/input`
+                  3. **Prioritize**: Sort by severity (CRITICAL > HIGH > MEDIUM > LOW)
+                  4. **Find fixes**: For top packages, `./04-fetch-osv-fix.sh <pkg> <eco>`
+                  5. **Verify**: `./05-check-osv-regression.sh <pkg> <eco> <version>` (skip if not clean)
+                  6. **Create PRs**: Up to `$MAX_PRS` PRs (env var, default: 1). For each:
+                     - Call `./07-create-fix-pr.sh` with JSON metadata
+                     - Append result to `/harness/.agent/work/pr-results.json`
+                     - Record skipped-but-fixable packages separately (NOT as exemptions)
+                  7. **Create exemptions** (ONLY for truly unfixable):
+                     - For transitive deps, no-fix-available, OS packages
+                     - Write to `/harness/.agent/output/unfixable.json` with fields: package_name, installed_version, severity, reason, justification, sto_issue_id, scan_id
+                     - Call `./08-create-exemptions.sh /harness/.agent/output/unfixable.json`
+                     - If API returns 500 error, record failure in report and continue (don't retry endlessly)
+                  8. **Initial report** (publish results so far):
+                     - Call `./11-generate-report.sh /harness/.agent/output/remediation-report.json`
+                     - Call `./12-publish-report.sh /harness/.agent/output/remediation-report.json`
+                     - This shows PRs created and exemptions immediately (validation pending)
+                  9. **Wait for validation** (CRITICAL - must wait for completion):
+                     - For each PR created in step 6:
+                     - Find the validation pipeline execution matching the branch name. Prefer the Harness MCP `pipeline_execution` list tool if a Harness MCP connector is mounted. If no Harness MCP tool is available, fall back to the Harness API: query `$HARNESS_BASE_URL` for executions of `$VALIDATION_PIPELINE_ID` authenticated with `-H "x-api-key: $HARNESS_API_KEY"`, and select the execution whose branch matches.
+                     - Call `./09-wait-for-validation.sh <execution-id> <branch-name>`
+                     - **IMPORTANT**: This script polls for up to 15 minutes - let it run completely
+                     - Script returns when pipeline succeeds/fails/times out
+                     - Merge validation results into pr-results.json
+                  10. **Final report** (update with validation results):
+                     - Call `./11-generate-report.sh /harness/.agent/output/remediation-report.json` again
+                     - Call `./12-publish-report.sh /harness/.agent/output/remediation-report.json` again
+                     - Now includes validation status for each PR
+
+                  ## Safety rules
+                  - Only remediate SCA vulnerabilities (`type == "SCA"`)
+                  - Skip OS-level packages unless explicitly installed in Dockerfile
+                  - One PR per dependency, respect `max_prs` cap
+                  - Never auto-approve exemptions
+                  - Flag major version bumps with `breaking_change_risk: true`
+                  - Stop at 70% turn budget and record `skipped_turn_budget`
+
+                  ## IMPORTANT: Use scripts, not manual work
+                  - **DO NOT** manually construct curl commands for STO/OSV/deps.dev APIs
+                  - **DO NOT** manually edit manifest files with Edit tool
+                  - **DO NOT** manually parse JSON responses with jq in Bash
+                  - **DO NOT** manually git commit/push/create PRs
+
+                  The scripts handle all of that. Your job is to:
+                  1. Call the right scripts in the right order
+                  2. Read script outputs and make decisions
+                  3. Build metadata JSON for scripts that need it
+              HARNESS_BASE_URL: ${{inputs.harness_base_url}}
+              VALIDATION_PIPELINE_ID: ${{inputs.validation_pipeline_id}}
+              HARNESS_API_KEY: ${{inputs.harness_token_secret}}
+              MAX_PRS: ${{inputs.max_prs}}
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>

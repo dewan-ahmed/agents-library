@@ -1,0 +1,39 @@
+pipeline:
+  name: Pull Request Authoring Sample
+  identifier: prAuthorSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Pull Request Authoring
+        identifier: Run_prAuthor
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Pull Request Authoring
+                  identifier: prAuthor
+                  spec:
+                    agentName: prAuthor
+                    agentSettings:
+                      llm_connector: <+input>
+                      repo_id: <+input>
+                      org_id: <+org.identifier>
+                      project_id: <+project.identifier>
+                      source_branch: <+codebase.branch>

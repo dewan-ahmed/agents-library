@@ -1,0 +1,31 @@
+pipeline:
+  name: Test Failure Classification Sample
+  identifier: automationFailureClassifierSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  stages:
+    - stage:
+        name: Run Test Failure Classification
+        identifier: Run_automationFailureClassifier
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Test Failure Classification
+                  identifier: automationFailureClassifier
+                  spec:
+                    agentName: automationFailureClassifier
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>.default(claude-sonnet-4-6)

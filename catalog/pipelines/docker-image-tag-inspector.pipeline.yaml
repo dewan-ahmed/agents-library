@@ -1,0 +1,59 @@
+pipeline:
+  name: Docker Image Tag Inspector
+  identifier: dockerImageTagInspector
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  variables:
+    - name: llmConnector
+      type: String
+      description: Account, org, or project LLM connector reference.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier exposed by your LLM connector.
+      required: true
+      value: <+input>
+    - name: dockerRepository
+      type: String
+      description: Public Docker Hub repository in namespace/name format.
+      required: true
+      value: <+input>
+    - name: daysThreshold
+      type: String
+      description: Report tags older than this many days.
+      required: true
+      value: <+input>.default(30)
+  stages:
+    - stage:
+        name: Inspect Docker Tags
+        identifier: inspect_docker_tags
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Docker Tag Inspector
+                  identifier: docker_tag_inspector
+                  spec:
+                    agentName: ca_docker_image_tag_inspector
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+                      dockerRepository: <+pipeline.variables.dockerRepository>
+                      daysThreshold: <+pipeline.variables.daysThreshold>
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure

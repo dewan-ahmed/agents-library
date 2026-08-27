@@ -1,0 +1,259 @@
+template:
+  inputs:
+    workspace:
+      type: string
+      label: IaCM Workspace
+      required: true
+      ui:
+        tooltip: Enter the IaCM workspace identifier whose drift / recommendations will be remediated.
+        placeholder: workspace-id
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier or inference-profile ARN.
+        placeholder: arn:aws:bedrock:us-east-1::application-inference-profile/...
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    remediation_type:
+      type: string
+      label: Remediation Type
+      default: iacm-drift
+      options:
+        - iacm-drift
+        - sto
+        - cloud-cost
+      ui:
+        component: select
+        tooltip: Select the type of remediation to perform.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    recommendation:
+      type: string
+      default: ""
+      label: Recommendation Payload
+      ui:
+        component: textarea
+        tooltip: Enter the JSON string with recommendation details. Required for sto and cloud-cost remediation types.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount (Harness Code MCP, GitHub MCP, GitLab MCP, etc.) used for SCM operations such as committing and pushing the remediation to the current branch.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - workspace
+    - llm_connector
+    - model_name
+    - title: Agent Configuration
+      items:
+        - mcp_connectors
+        - remediation_type
+        - recommendation
+  id: iacmRemediationAgent
+  name: IaCM Remediation
+  description: AI agent that remediates IaCM drift, security, and cloud-cost findings by editing Terraform or OpenTofu source and committing the fix to the current branch.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Init
+          if: <+Always>
+          id: init
+          iacm:
+            uses: openTofuStep@1.0.0
+            with:
+              command: init
+              workspace: ${{inputs.workspace}}
+        - name: Plan
+          if: <+Always>
+          id: plan
+          iacm:
+            uses: openTofuStep@1.0.0
+            with:
+              command: plan
+              workspace: ${{inputs.workspace}}
+        - name: Run IaCM Remediation Agent
+          if: <+Always>
+          id: runIacmRemediationAgent
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              PLUGIN_WORKING_DIRECTORY: ${{iacmOutput.rootDir}}
+              IACM_ROOT_DIR: ${{iacmOutput.rootDir}}
+              IACM_REPO_URL: ${{iacmOutput.repoUrl}}
+              IACM_REPO_TYPE: ${{iacmOutput.repoType}}
+              IACM_REPO_TOKEN: ${{iacmOutput.repoToken}}
+              REMEDIATION_TYPE: ${{inputs.remediation_type}}
+              RECOMMENDATION: ${{inputs.recommendation}}
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+              PLUGIN_TASK: |
+                You are the Harness IaCM Remediation agent. The previous steps
+                have already run `tofu init` and `tofu plan` on the IaCM
+                workspace. Your job is to analyze the plan, update the
+                Terraform / OpenTofu source to resolve the issue, and commit
+                the fix to the current branch in the IaCM workspace. The
+                commit lands directly on the user's branch, so every change
+                must be strictly scoped to the detected drift / recommendation
+                and must not pollute the branch.
+
+                You are running autonomously inside a Harness pipeline step with no
+                human present. Complete all steps end-to-end without asking for
+                confirmation or input.
+
+                Tooling notes:
+                - Inspect the configured MCP servers and the tools they expose, and
+                  use the right one for each operation (Harness platform calls, SCM
+                  operations, etc.).
+                - The CI runtime injects context as env vars. Read these first and
+                  use them when calling MCP tools — do not hardcode, do not invent
+                  values.
+                  Always present:
+                    Account / org / project: $HARNESS_ACCOUNT_ID, $HARNESS_ORG_ID,
+                                             $HARNESS_PROJECT_ID
+                    Execution / pipeline:    $HARNESS_EXECUTION_ID,
+                                             $HARNESS_PIPELINE_ID
+                    Service endpoints:       $HARNESS_TI_SERVICE_ENDPOINT, etc.
+                  Plus the IACM_* and REMEDIATION_TYPE / RECOMMENDATION env vars
+                  detailed in the Context section below (set by the openTofu
+                  init / plan steps). Resolution rule: prefer the template
+                  input; else the matching env var; else fetch via MCP. Never
+                  guess.
+                - Prefer MCP tools over direct HTTP / curl / SDK calls; fall back to
+                  those only when no suitable MCP tool exists.
+
+                Context (provided as env vars):
+                - IACM_ROOT_DIR    : working directory of the cloned Terraform repo
+                - IACM_REPO_URL    : git URL of the repo
+                - IACM_REPO_TYPE   : SCM provider (github, gitlab, bitbucket, harness, ...)
+                - IACM_REPO_TOKEN  : token for git push and PR creation
+                - REMEDIATION_TYPE : iacm-drift | sto | cloud-cost
+                - RECOMMENDATION   : JSON recommendation payload (sto / cloud-cost only)
+
+                Steps to perform:
+                1. Inspect $IACM_ROOT_DIR. Read the plan output produced by the
+                   previous step to understand the resource changes.
+                2. Apply minimal, targeted edits to the `.tf` files inside
+                   $IACM_ROOT_DIR to resolve the issue:
+                      - For `iacm-drift`: bring source code in line with the
+                        actual infrastructure state shown by the plan.
+                      - For `sto`: apply the security fix described in
+                        $RECOMMENDATION.
+                      - For `cloud-cost`: apply the optimization described in
+                        $RECOMMENDATION.
+                3. Run `tofu fmt` (or `terraform fmt`) to keep the files clean.
+                4. Verify the changes:
+                      - Confirm `tofu validate` (or `terraform validate`) passes
+                        inside $IACM_ROOT_DIR.
+                      - Run `git diff HEAD` (or the SCM MCP connector's diff
+                        tools) to review every changed file. Only remediation-
+                        related edits are permitted.
+                5. Determine the current branch in the IaCM workspace by running
+                   `git -C $IACM_ROOT_DIR rev-parse --abbrev-ref HEAD`. Record
+                   this as `current_branch`. Pick the human label based on
+                   $REMEDIATION_TYPE:
+                      iacm-drift  → label "IaCM Drift Remediation"
+                      sto         → label "STO Security Remediation"
+                      cloud-cost  → label "Cloud Cost Remediation"
+                6. Commit and push the fix to `current_branch`.
+                      - Stage ONLY the `.tf` files modified for the
+                        remediation (and any files touched by `tofu fmt` on
+                        those same files). Use
+                        `git -C $IACM_ROOT_DIR add <file>` per file. NEVER run
+                        `git add -A`, `git add .`, or stage by directory —
+                        that risks committing unrelated edits or any noise
+                        produced by `tofu init` / `tofu plan` (state files,
+                        lock files, `.terraform/` cache, etc.).
+                      - Re-confirm the staged diff with
+                        `git -C $IACM_ROOT_DIR diff --cached`. If it contains
+                        anything outside remediation-related edits, unstage
+                        and re-stage only what belongs.
+                      - Authenticate git with $IACM_REPO_TOKEN by injecting
+                        the token into the remote URL. Parse host and path
+                        from $IACM_REPO_URL, then run:
+                        `git -C $IACM_ROOT_DIR remote set-url origin https://x-access-token:$IACM_REPO_TOKEN@<host>/<path>`.
+                      - Commit with message:
+                        `<label>: automated changes by Harness AI`.
+                        Make exactly one commit per run. Prefer the SCM MCP
+                        connector's commit / push tools (matching
+                        $IACM_REPO_TYPE) when available; the same safety
+                        rules apply.
+                      - Push to origin on the same branch — a plain push, no
+                        force:
+                        `git -C $IACM_ROOT_DIR push origin <current_branch>`.
+                        Work only with the commit that was cloned — do NOT
+                        pull, rebase, or merge any new commits from the
+                        remote.
+                      - If the push is rejected for any reason (a new commit
+                        appeared on the remote, branch protection,
+                        non-fast-forward, required reviews, pre-receive
+                        hook, etc.), abort cleanly: undo the local commit
+                        with `git -C $IACM_ROOT_DIR reset --hard HEAD~1` so
+                        the working tree matches the pre-commit state, print
+                        the rejection output verbatim, and exit non-zero.
+                        Do NOT retry with `--force` / `--force-with-lease`,
+                        do NOT rebase, do NOT merge. A human will
+                        investigate.
+                      - On a successful push, print a final summary
+                        including: `current_branch`, the list of files
+                        staged, the commit SHA, and a short explanation of
+                        the drift / vulnerability / cost finding and the fix
+                        applied.
+
+                Safety rules:
+                - Stage only `.tf` files modified for the remediation. Never
+                  `git add -A` / `git add .`. The branch belongs to the user;
+                  unrelated commits (state files, terraform cache, lockfiles,
+                  etc.) pollute their history.
+                - Do NOT modify resources outside the scope of the detected
+                  drift / recommendation.
+                - Make exactly one commit per run.
+                - Work only with the commit that was cloned. Never pull,
+                  rebase, or merge new commits from the remote.
+                - Never force push. If push is rejected, undo the local
+                  commit, surface the error, and exit non-zero — a human will
+                  resolve it.
+                - Never echo or log $IACM_REPO_TOKEN, credentials, or any other
+                  secret value.

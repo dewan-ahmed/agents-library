@@ -1,0 +1,237 @@
+template:
+  inputs:
+    harness_execution_id:
+      type: string
+      default: ""
+      label: Failed Execution ID
+      ui:
+        tooltip: Enter the execution ID of the failed deployment pipeline run. Leave empty to use $HARNESS_EXECUTION_ID from the runtime env.
+        placeholder: Execution ID
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_pipeline_id:
+      type: string
+      default: ""
+      label: Pipeline ID
+      ui:
+        tooltip: Enter the identifier of the pipeline that contains the failed deployment. Leave empty to use $HARNESS_PIPELINE_ID from the runtime env.
+        placeholder: Pipeline ID
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_account_id:
+      type: string
+      default: ""
+      label: Harness Account ID
+      ui:
+        tooltip: Enter the Harness account identifier. Leave empty to use $HARNESS_ACCOUNT_ID from the runtime env.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_org_id:
+      type: string
+      default: ""
+      label: Harness Org ID
+      ui:
+        tooltip: Enter the Harness organization identifier. Leave empty to use $HARNESS_ORG_ID from the runtime env.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_project_id:
+      type: string
+      default: ""
+      label: Harness Project ID
+      ui:
+        tooltip: Enter the Harness project identifier. Leave empty to use $HARNESS_PROJECT_ID from the runtime env.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    llm_connector:
+      type: connector
+      label: LLM Connector
+      required: true
+      ui:
+        connectorCategories:
+          - AI
+        tooltip: Select the LLM connector used by the harness-ai-agent (Anthropic / Bedrock).
+        placeholder: Select LLM Connector
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    model_name:
+      type: string
+      label: Model Name
+      required: true
+      ui:
+        tooltip: Enter the Anthropic / Bedrock model identifier or inference-profile ARN.
+        placeholder: arn:aws:bedrock:us-east-1::application-inference-profile/...
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    mcp_connectors:
+      type: array
+      label: MCP Connectors
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+        tooltip: Specify a list of MCP connector refs to mount. Include a Harness MCP connector to fetch logs and execution metadata; add SCM connectors as needed.
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+    harness_base_url:
+      type: string
+      default: ""
+      label: Harness Base URL
+      ui:
+        tooltip: Enter the Harness base URL (override for self-managed installs). Leave empty to derive from $HARNESS_TI_SERVICE_ENDPOINT (extract scheme + host, e.g. "https://qa.harness.io/ti-service" → "https://qa.harness.io").
+        allowedValueTypes:
+          - fixed
+          - runtime
+          - expression
+  layout:
+    - llm_connector
+    - model_name
+    - title: Agent Configuration
+      items:
+        - mcp_connectors
+        - harness_execution_id
+        - harness_pipeline_id
+        - harness_account_id
+        - harness_org_id
+        - harness_project_id
+        - harness_base_url
+  id: manifestRemediatorAgent
+  name: Kubernetes Manifest Remediation
+  description: AI agent that analyzes Kubernetes and Helm deployment failures and produces a structured remediation YAML with actionable fixes.
+  version: 1
+  author: harness
+  agent:
+    group:
+      steps:
+        - name: Run Manifest Remediator Agent
+          if: <+Always>
+          id: runManifestRemediatorAgent
+          run:
+            container:
+              image: harness/harness-ai-agent:0.1.71
+              connector: account.harnessImage
+            env:
+              ANTHROPIC_MODEL: ${{inputs.model_name}}
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llm_connector.id}}
+              HARNESS_BASE_URL: ${{inputs.harness_base_url}}
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcp_connectors>)>
+              PLUGIN_TASK: |
+                You are the Harness Manifest Remediator agent. A Harness CD
+                deployment has failed. Your job is to fetch the logs, analyze the
+                failure, and produce a structured remediation report for the
+                Kubernetes / Helm manifest issues.
+
+                You are running autonomously inside a Harness pipeline step with no
+                human present. Complete all steps end-to-end without asking for
+                confirmation or input.
+
+                Tooling notes:
+                - Inspect the configured MCP servers and the tools they expose, and
+                  use the right one for each operation (Harness platform calls, SCM
+                  operations, etc.).
+                - The CI runtime injects context as env vars. Read these first and
+                  use them when calling MCP tools — do not hardcode, do not invent
+                  values.
+                  Always present:
+                    Account / org / project: $HARNESS_ACCOUNT_ID, $HARNESS_ORG_ID,
+                                             $HARNESS_PROJECT_ID
+                    Execution / pipeline:    $HARNESS_EXECUTION_ID,
+                                             $HARNESS_PIPELINE_ID
+                    Working dir:             $HARNESS_WORKSPACE
+                    Service endpoint:        $HARNESS_TI_SERVICE_ENDPOINT
+                                             (used in Step 1 to derive base URL)
+                  Only when the pipeline included a "clone codebase" step (repo
+                  cloned into /harness):
+                    Repo / branch / SCM:     $DRONE_REPO_NAME, $DRONE_REPO_LINK,
+                                             $DRONE_REMOTE_URL, $DRONE_REPO_SCM,
+                                             $DRONE_BRANCH, $DRONE_TARGET_BRANCH
+                  Resolution rule: prefer the template input; else the matching env
+                  var; else fetch via the appropriate MCP tool. Never guess.
+                - Prefer MCP tools over direct HTTP / curl / SDK calls; fall back to
+                  those only when no suitable MCP tool exists.
+                - The default workspace is /harness — check there first; the
+                  repository is usually already cloned at /harness by the CI
+                  step. If /harness is empty or not writable, fall back to the
+                  $HARNESS_WORKSPACE env var or determine the workspace
+                  yourself.
+
+                Steps to perform:
+                1. Resolve required context per the resolution rule in Tooling
+                   notes. Fail with a precise message if no source has the
+                   value. Record the resolved values and use them in every
+                   subsequent step:
+                      execution_id → ${{inputs.harness_execution_id}} (else $HARNESS_EXECUTION_ID)
+                      pipeline_id  → ${{inputs.harness_pipeline_id}} (else $HARNESS_PIPELINE_ID)
+                      account_id   → ${{inputs.harness_account_id}} (else $HARNESS_ACCOUNT_ID)
+                      org_id       → ${{inputs.harness_org_id}} (else $HARNESS_ORG_ID)
+                      project_id   → ${{inputs.harness_project_id}} (else $HARNESS_PROJECT_ID)
+                      base_url     → ${{inputs.harness_base_url}}
+                                     (else extract scheme + host from
+                                      $HARNESS_TI_SERVICE_ENDPOINT, e.g.
+                                      "https://qa.harness.io/ti-service"
+                                      → "https://qa.harness.io")
+                2. Verify the manifests / values repo at the resolved workspace.
+                   Clone explicitly only if no repo is accessible. The agent
+                   may also operate from execution logs alone when no manifest
+                   sources are available locally.
+                3. Use the configured MCP tools (with the resolved account / org /
+                   project / execution / pipeline values) to fetch the execution
+                   and identify failed steps. Focus on `K8sRollingDeploy` and
+                   `HelmDeploy` step types.
+                4. Fetch logs for those failed steps via MCP tools. Inspect events
+                   / errors: image pull failures, resource constraints, validation
+                   errors, Helm template errors, missing required fields, RBAC
+                   issues, readiness/liveness probe failures, etc.
+                5. Correlate the failure with manifest / values configuration
+                   referenced in the execution.
+                6. Write a comprehensive YAML report to
+                   `<resolved-workspace>/manifest_remediation_results.yaml`
+                   with the schema:
+
+                      execution_id: <id>
+                      pipeline_id: <id>
+                      analysis:
+                        failed_step: <name>
+                        failure_type: <category>
+                        root_cause: <one-paragraph explanation>
+                        evidence:
+                          - <log line / event>
+                      recommended_fixes:
+                        - file: <manifest path or `values.yaml`>
+                          change: <one-line description>
+                          before: |
+                            <yaml>
+                          after: |
+                            <yaml>
+                          rationale: <why this fixes the issue>
+                      deployment_strategy_adjustments: <optional notes>
+                      next_steps:
+                        - <ordered, actionable steps>
+
+                7. Print the full content of the report file written in step 6
+                   (cat the path you used) so it is visible in pipeline logs.
+
+                Safety rules:
+                - Output structured YAML only — do not embed secrets or tokens.
+                - Recommend changes only — do not apply or commit them.
+                - Never echo or log secret values, tokens, or credentials.

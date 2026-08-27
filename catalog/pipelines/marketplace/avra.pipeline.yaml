@@ -1,0 +1,39 @@
+pipeline:
+  name: Vulnerability Remediation Sample
+  identifier: avraSample
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags:
+    agents-library: generated
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Run Vulnerability Remediation
+        identifier: Run_avra
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Vulnerability Remediation
+                  identifier: avra
+                  spec:
+                    agentName: avra
+                    agentSettings:
+                      llm_connector: <+input>
+                      model_name: <+input>.default(global.anthropic.claude-opus-4-6-v1)
+                      validation_pipeline_id: <+input>
+                      harness_base_url: <+input>.default(https://app.harness.io)
+                      harness_token_secret: <+input>
