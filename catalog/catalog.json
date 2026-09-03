@@ -389,6 +389,421 @@
       ],
       "prerequisites": ["LLM connector", "Network access to hub.docker.com", "Docker Hub username and token secret for cleanup modes", "Approval group for approval-gated deletion"],
       "keywords": ["docker", "docker hub", "tag", "governance", "retention", "cleanup", "delete", "approval", "registry", "storage", "cost"]
+    },
+    {
+      "id": "ca_oncall_rca",
+      "harnessAgentId": "ca_oncall_rca",
+      "name": "Incident On-call RCA",
+      "summary": "Investigates one pinned alert runbook-first across PagerDuty, Confluence, Grafana, Cloud Logging, and Harness deploys, then writes a grounded RCA and opens a fix PR only when the alert is actionable.",
+      "description": "An advanced multi-provider on-call agent. A first step installs stdio MCP runtimes (Grafana, PagerDuty, harness-mcp-v2), writes provider credentials to files instead of interpolating them into scripts, emits an MCP server config, and optionally sparse-checks out a team skill pack. The agent then triages the single incident in its request payload, prefers the runbook over blind metric queries, bounds every Grafana and gcloud window to the incident, requires an inspected commit diff before claiming a deploy caused the failure, and treats one Harness Code pull request as its only allowed write.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["monitor", "release"],
+      "modules": ["ci", "cd", "platform"],
+      "triggers": ["pipeline", "failed_pipeline"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName", "mcpConnectors", "agent_request_b64", "team_name", "services", "atlassian_cloud_id"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "An Anthropic-backed AI connector. The sub-agent and Skill tooling assume a Claude model today."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model your LLM connector can serve, such as a Claude model id or a Bedrock inference profile ARN."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcpConnectors",
+          "note": "Supplies read-only Confluence and Jira tools for runbooks and known issues. Replace the YOUR_ATLASSIAN_MCP_CONNECTOR placeholder."
+        },
+        {
+          "key": "atlassian_cloud_id",
+          "label": "Atlassian cloudId",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.atlassian_cloud_id",
+          "note": "Passed on every Confluence and Jira call. This is an input so no tenant id is committed to the catalog."
+        },
+        {
+          "key": "pagerduty_api_key",
+          "label": "PagerDuty API key",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.pagerduty_api_key",
+          "note": "A read-scoped User API key. The agent never acknowledges, resolves, or reassigns incidents."
+        },
+        {
+          "key": "grafana_token",
+          "label": "Grafana service-account token",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "agentSettings.grafana_token",
+          "note": "Needed to read alert rules and run bounded Prometheus or Loki queries. Also set grafana_url."
+        },
+        {
+          "key": "harness_api_key",
+          "label": "Harness PAT",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_api_key",
+          "note": "Used by harness-mcp-v2 for repositories, pull-requests, and pipelines. Needs pull-request create permission for the actionable path."
+        },
+        {
+          "key": "gcp_credentials_json",
+          "label": "GCP service-account JSON",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "agentSettings.gcp_credentials_json",
+          "note": "Only required when the agent should read Cloud Logging with gcloud. Written to an ADC file with 0600 permissions."
+        },
+        {
+          "key": "team_skill_git_url",
+          "label": "Team skill pack",
+          "kind": "input",
+          "requirement": "optional",
+          "field": "agentSettings.team_skill_git_url",
+          "note": "Optional git repo holding plugin.json plus skills/<name>/SKILL.md for service maps and playbooks. Team skills override the inline steps."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "PagerDuty read API key", "Harness PAT with repository and pull-request access", "Grafana token and URL for metric evidence", "Optional GCP credentials for Cloud Logging"],
+      "keywords": ["oncall", "on-call", "incident", "rca", "root cause", "triage", "pagerduty", "grafana", "confluence", "runbook", "sre", "alert", "deploy correlation", "mcp"]
+    },
+    {
+      "id": "ca_change_advisory",
+      "harnessAgentId": "ca_change_advisory",
+      "name": "Change Advisory Go/No-Go",
+      "summary": "Builds a CAB decision for a pending release by reconciling the Harness execution diff, the Confluence CAB runbook, open Jira risks, and a bounded telemetry window.",
+      "description": "A release governance agent that answers go, hold, or rollback-watch with cited evidence. It inspects the actual commit diff behind an execution or artifact rather than trusting the pipeline name, reads the CAB page for the target service and environment, checks unresolved Jira risks from the last 14 days, and optionally samples RED or error-budget metrics. It holds by default when evidence is incomplete, and it never approves, runs, interrupts, or merges anything.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["release", "govern"],
+      "modules": ["cd", "platform"],
+      "triggers": ["pipeline", "approval"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName", "mcpConnectors", "agent_request_b64", "team_name", "atlassian_cloud_id", "confluence_space", "jira_project"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "An accessible account, org, or project AI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model supported by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcpConnectors",
+          "note": "Read-only Confluence and Jira access for the CAB page and open risks."
+        },
+        {
+          "key": "confluence_space",
+          "label": "CAB Confluence space",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.confluence_space",
+          "note": "Scopes the single CQL search so the agent does not wander across the wiki."
+        },
+        {
+          "key": "jira_project",
+          "label": "Jira project",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.jira_project",
+          "note": "Project searched for unresolved risks touching this service in the last 14 days."
+        },
+        {
+          "key": "harness_api_key",
+          "label": "Harness PAT",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_api_key",
+          "note": "Read access to executions, repositories, and commits. The agent performs no pipeline actions."
+        },
+        {
+          "key": "grafana_token",
+          "label": "Grafana service-account token",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "agentSettings.grafana_token",
+          "note": "Enables the bounded RED or error-budget check. The agent skips telemetry and says so when unmapped."
+        },
+        {
+          "key": "request_json",
+          "label": "Change request payload",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "JSON naming the service, environment, and the pipeline, execution, or artifact under review."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "Harness PAT with execution and repository read access", "CAB Confluence space and Jira project", "Optional Grafana token for telemetry evidence"],
+      "keywords": ["change advisory", "cab", "go no-go", "release", "governance", "risk", "deployment", "jira", "confluence", "approval", "rollback", "readiness"]
+    },
+    {
+      "id": "ca_security_finding_triage",
+      "harnessAgentId": "ca_security_finding_triage",
+      "name": "Security Finding Triage",
+      "summary": "Triages one STO or SCS finding by re-reading the cited file, checking for duplicate Jira issues, and classifying exploitability, with ticket creation and fix PRs behind explicit flags.",
+      "description": "A security triage agent that reduces scanner noise without silently mutating anything. It fetches the finding through Harness MCP, reads the referenced file at the scan ref to confirm the issue still exists, runs one narrow JQL for similar open issues, and classifies the finding as exploitable, needs-review, or likely false positive. Jira creation happens only when create_ticket is true and no duplicate exists, and a pull request happens only when open_fix_pr is true and the fix is a genuinely one-file, low-risk patch it can name exactly.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["secure"],
+      "modules": ["sto", "ci"],
+      "triggers": ["pipeline", "scan_finding", "jira_issue"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName", "mcpConnectors", "agent_request_b64", "team_name", "services", "atlassian_cloud_id", "jira_project", "create_ticket", "open_fix_pr"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "An accessible account, org, or project AI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model supported by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcpConnectors",
+          "note": "Used to search for duplicate issues, and to create one issue when create_ticket is enabled."
+        },
+        {
+          "key": "harness_api_key",
+          "label": "Harness PAT",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_api_key",
+          "note": "Needs STO and SCS finding read plus repository read. Pull-request create is required only when open_fix_pr is true."
+        },
+        {
+          "key": "create_ticket",
+          "label": "Create Jira ticket",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.create_ticket",
+          "note": "Defaults to false. When true the agent creates at most one issue, and skips creation if a duplicate already exists."
+        },
+        {
+          "key": "open_fix_pr",
+          "label": "Open fix pull request",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.open_fix_pr",
+          "note": "Defaults to false. When true the agent still refuses to open a PR unless the patch is one file and low risk."
+        },
+        {
+          "key": "services",
+          "label": "Owned repositories",
+          "kind": "input",
+          "requirement": "required",
+          "field": "agentSettings.services",
+          "note": "Constrains which repositories the agent may read or branch from. It never guesses a repo."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "Harness PAT with STO/SCS finding and repository access", "Jira project for duplicate search", "Pull-request permission only when open_fix_pr is enabled"],
+      "keywords": ["security", "sto", "scs", "finding", "triage", "vulnerability", "false positive", "cve", "cwe", "exploitability", "jira", "fix pr", "remediation"]
+    },
+    {
+      "id": "ca_runbook_drift",
+      "harnessAgentId": "ca_runbook_drift",
+      "name": "Runbook Drift Detector",
+      "summary": "Compares documented runbook alerts, queries, thresholds, and owners against live Grafana rules and Harness pipelines, then reports drift without editing the wiki.",
+      "description": "A documentation-versus-reality agent for teams whose runbooks quietly rot. It reads a bounded set of Confluence runbook pages, extracts documented alert names, queries, thresholds, owners, and pipeline names, and marks whether each was quoted or inferred. It then fetches the live Grafana rules and named Harness pipelines and reports missing-in-prod, missing-in-docs, stale-query, and broken-link findings. It never edits Confluence or changes alert rules, and it can open a single docs pull request when explicitly enabled.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["govern", "monitor"],
+      "modules": ["platform", "ci"],
+      "triggers": ["pipeline", "scheduled"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName", "mcpConnectors", "agent_request_b64", "team_name", "atlassian_cloud_id", "confluence_space", "grafana_scope", "pipeline_ids", "open_docs_pr", "docs_repo_id"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "An accessible account, org, or project AI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model supported by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcpConnectors",
+          "note": "Read-only Confluence access. The agent is explicitly forbidden from editing pages."
+        },
+        {
+          "key": "grafana_scope",
+          "label": "Grafana folder or rule UIDs",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.grafana_scope",
+          "note": "Bounds which alert rules are compared. Prevents whole-instance scans and full dashboard JSON reads."
+        },
+        {
+          "key": "pipeline_ids",
+          "label": "Harness pipeline ids",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.pipeline_ids",
+          "note": "The documented pipelines to compare against real stages and steps."
+        },
+        {
+          "key": "open_docs_pr",
+          "label": "Open docs pull request",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.open_docs_pr",
+          "note": "Defaults to false. When true the agent writes a drift report to docs_repo_id on its own branch."
+        },
+        {
+          "key": "docs_repo_id",
+          "label": "Docs repository",
+          "kind": "input",
+          "requirement": "optional",
+          "field": "agentSettings.docs_repo_id",
+          "note": "Required only when open_docs_pr is true. Must be a team-owned repository."
+        },
+        {
+          "key": "grafana_token",
+          "label": "Grafana service-account token",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.grafana_token",
+          "note": "Read access to alerting rules. Also set grafana_url."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "Grafana token with alert rule read access", "Harness PAT with pipeline read access", "Docs repository only when open_docs_pr is enabled"],
+      "keywords": ["runbook", "drift", "documentation", "confluence", "grafana", "alert rules", "thresholds", "ownership", "audit", "governance", "stale docs", "sre"]
+    },
+    {
+      "id": "ca_incident_comms",
+      "harnessAgentId": "ca_incident_comms",
+      "name": "Incident Customer Comms Drafter",
+      "summary": "Drafts separate internal and customer-safe incident updates from the pinned PagerDuty incident, a bounded impact window, and your Confluence status template.",
+      "description": "A comms drafting agent for the moment when engineers are busy and customers are waiting. It reads only the pinned PagerDuty incident, follows your Confluence status-page template, and optionally confirms the impact window in Grafana. It produces two clearly separated blocks so a human can review before anything is sent, and customer text is explicitly barred from hostnames, IPs, stack traces, and internal channel names. It never mutates PagerDuty, never pages anyone, and never publishes a status page.",
+      "ownership": "custom",
+      "linkType": "custom",
+      "lifecycle": ["monitor"],
+      "modules": ["platform"],
+      "triggers": ["pipeline", "failed_pipeline"],
+      "scope": "project",
+      "version": "1.0.0",
+      "inputs": ["llmConnector", "modelName", "mcpConnectors", "agent_request_b64", "team_name", "atlassian_cloud_id", "status_template", "severity"],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "An accessible account, org, or project AI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model supported by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.mcpConnectors",
+          "note": "Read-only access used to fetch the status-page template page."
+        },
+        {
+          "key": "status_template",
+          "label": "Confluence status template",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.status_template",
+          "note": "Page id or title. The drafted sections follow this template rather than an invented format."
+        },
+        {
+          "key": "pagerduty_api_key",
+          "label": "PagerDuty API key",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.pagerduty_api_key",
+          "note": "Read-scoped. The agent investigates only the pinned incident and performs no PagerDuty writes."
+        },
+        {
+          "key": "severity",
+          "label": "Severity",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.severity",
+          "note": "Drives tone and update cadence. Team skills can define approved language per severity."
+        },
+        {
+          "key": "grafana_token",
+          "label": "Grafana service-account token",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "agentSettings.grafana_token",
+          "note": "Used only to confirm the impact window. The agent skips this and says so when unmapped."
+        },
+        {
+          "key": "post_customer_draft",
+          "label": "Include customer draft in Slack post",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.post_customer_draft",
+          "note": "Defaults to false. Even when true the pipeline only posts to Slack, never to a public status page."
+        }
+      ],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "PagerDuty read API key", "Confluence status-page template", "Optional Grafana token for impact confirmation"],
+      "keywords": ["incident", "communication", "comms", "status page", "customer update", "pagerduty", "severity", "draft", "internal update", "confluence", "template"]
     }
   ],
   "pipelines": [
@@ -618,6 +1033,219 @@
           "requirement": "optional",
           "field": "approval_gate.approvers.userGroups",
           "note": "The sample uses account._account_all_users. Replace it with a narrower authorized user group for production."
+        }
+      ]
+    },
+    {
+      "id": "oncall-rca",
+      "name": "Incident On-call RCA",
+      "identifier": "oncallRca",
+      "summary": "Normalize a PagerDuty, Grafana, or Slack-linked alert into a request payload, run the on-call RCA agent, then export and optionally post the RCA to a Slack thread.",
+      "runtimeInputs": ["llmConnector", "modelName", "team_name", "services", "alert_payload", "atlassian_cloud_id", "pagerduty_api_key_secret", "grafana_url", "grafana_token_secret", "gcp_credentials_json_secret", "harness_api_key_secret", "harness_account_id", "harness_org", "harness_project", "slack_thread_ts", "slack_bot_token_secret"],
+      "lifecycle": ["monitor", "release"],
+      "modules": ["ci", "cd", "platform"],
+      "triggers": ["pipeline", "failed_pipeline"],
+      "complexity": "advanced",
+      "agentIds": ["ca_oncall_rca"],
+      "yamlFile": "oncall-rca.pipeline.yaml",
+      "stages": ["Prepare Alert Payload", "Run On-call RCA", "Export Summary", "Post Summary To Slack"],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "PagerDuty read key", "Harness PAT", "Slack bot token to read a permalink or post the RCA"],
+      "configuration": [
+        {
+          "key": "alert_payload",
+          "label": "Alert payload or Slack link",
+          "kind": "input",
+          "requirement": "optional",
+          "field": "pipeline.variables.alert_payload",
+          "note": "Paste alert JSON for manual runs. The prepare step also accepts a Slack message permalink in slack_thread_ts and normalizes it."
+        },
+        {
+          "key": "secretExpressions",
+          "label": "Secret expressions",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "pipeline.variables.*_secret",
+          "note": "Every credential variable holds a Harness secret expression, not a literal. Nothing is committed to the catalog."
+        },
+        {
+          "key": "slack_bot_token_secret",
+          "label": "Slack bot token",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "pipeline.variables.slack_bot_token_secret",
+          "note": "Needs chat:write to post, plus channels:history or groups:history to read an incident permalink."
+        },
+        {
+          "key": "postStep",
+          "label": "Slack posting",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "post_summary_to_slack.when.condition",
+          "note": "The agent never posts. The pipeline posts the exported summary only when a channel or thread is supplied."
+        }
+      ]
+    },
+    {
+      "id": "change-advisory",
+      "name": "Change Advisory Go/No-Go",
+      "identifier": "changeAdvisory",
+      "summary": "Encode a change request as JSON, run the CAB advisory agent against the Harness diff, Confluence CAB page, Jira risks, and telemetry, then export the go/hold decision.",
+      "runtimeInputs": ["llmConnector", "modelName", "team_name", "request_json", "atlassian_cloud_id", "confluence_space", "jira_project", "grafana_url", "grafana_token_secret", "harness_api_key_secret", "harness_account_id", "harness_org", "harness_project"],
+      "lifecycle": ["release", "govern"],
+      "modules": ["cd", "platform"],
+      "triggers": ["pipeline", "approval"],
+      "complexity": "advanced",
+      "agentIds": ["ca_change_advisory"],
+      "yamlFile": "change-advisory.pipeline.yaml",
+      "stages": ["Prepare Request", "Run Change Advisory", "Export Summary", "Post Summary To Slack"],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "Harness PAT with execution and repository read", "CAB Confluence space", "Jira project"],
+      "configuration": [
+        {
+          "key": "request_json",
+          "label": "Change request JSON",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "Must name the service, environment, and the pipeline, execution, or artifact under review. The prepare step fails fast on invalid JSON."
+        },
+        {
+          "key": "confluence_space",
+          "label": "CAB space and Jira project",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.confluence_space, pipeline.variables.jira_project",
+          "note": "Both are scoped so the agent runs one narrow CQL and one narrow JQL instead of broad searches."
+        },
+        {
+          "key": "readOnly",
+          "label": "Read-only guarantee",
+          "kind": "value",
+          "requirement": "not_needed",
+          "field": "agent task rules",
+          "note": "This pipeline has no approval or run step. The agent cannot approve, merge, or execute the change it reviews."
+        }
+      ]
+    },
+    {
+      "id": "security-finding-triage",
+      "name": "Security Finding Triage",
+      "identifier": "securityFindingTriage",
+      "summary": "Encode a finding reference, triage it against the live file and existing Jira issues, and optionally create one ticket or open one low-risk fix PR behind explicit flags.",
+      "runtimeInputs": ["llmConnector", "modelName", "team_name", "services", "request_json", "atlassian_cloud_id", "jira_project", "create_ticket", "open_fix_pr", "harness_api_key_secret", "harness_account_id", "harness_org", "harness_project"],
+      "lifecycle": ["secure"],
+      "modules": ["sto", "ci"],
+      "triggers": ["pipeline", "scan_finding", "jira_issue"],
+      "complexity": "advanced",
+      "agentIds": ["ca_security_finding_triage"],
+      "yamlFile": "security-finding-triage.pipeline.yaml",
+      "stages": ["Prepare Request", "Run Security Finding Triage", "Export Summary", "Post Summary To Slack"],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "Harness PAT with STO/SCS and repository access", "Jira project", "Pull-request permission only when open_fix_pr is true"],
+      "configuration": [
+        {
+          "key": "request_json",
+          "label": "Finding reference JSON",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "Identifies the STO or SCS finding id, or the scan execution to triage."
+        },
+        {
+          "key": "create_ticket",
+          "label": "Ticket and PR flags",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.create_ticket, pipeline.variables.open_fix_pr",
+          "note": "Both default to false, so the first run of this pipeline is a report. Enable them deliberately."
+        },
+        {
+          "key": "services",
+          "label": "Owned repositories",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.services",
+          "note": "Bounds which repositories a fix branch may target."
+        }
+      ]
+    },
+    {
+      "id": "runbook-drift",
+      "name": "Runbook Drift Detector",
+      "identifier": "runbookDrift",
+      "summary": "Compare documented runbooks against live Grafana alert rules and Harness pipelines on a schedule, and export a drift report with optional docs PR.",
+      "runtimeInputs": ["llmConnector", "modelName", "team_name", "request_json", "atlassian_cloud_id", "confluence_space", "grafana_scope", "pipeline_ids", "open_docs_pr", "docs_repo_id", "grafana_url", "grafana_token_secret", "harness_api_key_secret", "harness_account_id", "harness_org", "harness_project"],
+      "lifecycle": ["govern", "monitor"],
+      "modules": ["platform", "ci"],
+      "triggers": ["pipeline", "scheduled"],
+      "complexity": "advanced",
+      "agentIds": ["ca_runbook_drift"],
+      "yamlFile": "runbook-drift.pipeline.yaml",
+      "stages": ["Prepare Request", "Run Runbook Drift", "Export Summary", "Post Summary To Slack"],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "Grafana token with alert rule read", "Harness PAT with pipeline read", "Docs repository only when open_docs_pr is true"],
+      "configuration": [
+        {
+          "key": "grafana_scope",
+          "label": "Grafana scope and pipeline ids",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.grafana_scope, pipeline.variables.pipeline_ids",
+          "note": "Bounding both keeps the comparison cheap and prevents whole-instance scans."
+        },
+        {
+          "key": "open_docs_pr",
+          "label": "Docs PR flag",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.open_docs_pr",
+          "note": "Defaults to false. When enabled, set docs_repo_id to a team-owned repository."
+        },
+        {
+          "key": "schedule",
+          "label": "Recommended trigger",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "trigger",
+          "note": "Drift is a slow problem. A weekly or monthly scheduled trigger fits better than a per-commit run."
+        }
+      ]
+    },
+    {
+      "id": "incident-comms",
+      "name": "Incident Customer Comms",
+      "identifier": "incidentComms",
+      "summary": "Draft internal and customer-safe incident updates from a pinned PagerDuty incident and your Confluence template, then export them for human review before sending.",
+      "runtimeInputs": ["llmConnector", "modelName", "team_name", "request_json", "atlassian_cloud_id", "status_template", "severity", "pagerduty_api_key_secret", "post_customer_draft", "grafana_url", "grafana_token_secret"],
+      "lifecycle": ["monitor"],
+      "modules": ["platform"],
+      "triggers": ["pipeline", "failed_pipeline"],
+      "complexity": "intermediate",
+      "agentIds": ["ca_incident_comms"],
+      "yamlFile": "incident-comms.pipeline.yaml",
+      "stages": ["Prepare Request", "Run Incident Comms", "Export Summary", "Post Summary To Slack"],
+      "prerequisites": ["LLM connector", "Atlassian MCP connector", "PagerDuty read key", "Confluence status-page template", "Slack bot token when posting the internal draft"],
+      "configuration": [
+        {
+          "key": "request_json",
+          "label": "Incident reference JSON",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "Must contain the PagerDuty incident id. The agent refuses to list-and-pick an incident by timestamp."
+        },
+        {
+          "key": "post_customer_draft",
+          "label": "Customer draft posting",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.post_customer_draft",
+          "note": "Defaults to false. This pipeline only ever posts to Slack; publishing a status page stays a human action."
+        },
+        {
+          "key": "status_template",
+          "label": "Confluence status template",
+          "kind": "value",
+          "requirement": "required",
+          "field": "pipeline.variables.status_template",
+          "note": "Keeps drafted updates consistent with your approved external comms format."
         }
       ]
     }

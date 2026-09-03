@@ -1,0 +1,327 @@
+version: 1
+agent:
+  step:
+    group:
+      steps:
+        - name: Install MCP Runtimes
+          id: install_mcp_runtimes
+          run:
+            shell: Bash
+            script: |-
+              set -euo pipefail
+
+              mkdir -p /harness/.agent-tools/bin /harness/.cache/uv \
+                       /harness/.agent /harness/.agent/context /harness/.agent/output \
+                       /harness/.agent/plugins/team-skills/skills /harness/.agent/secrets
+
+              cat > /harness/.agent/context/agent-request.b64 <<'AGENTREQUEST'
+              ${{inputs.agent_request_b64}}
+              AGENTREQUEST
+              python3 - <<'PY'
+              import base64
+              from pathlib import Path
+
+              source = Path("/harness/.agent/context/agent-request.b64").read_text().strip()
+              target = Path("/harness/.agent/context/agent-request.json")
+              if source:
+                  source += "=" * (-len(source) % 4)
+                  target.write_text(base64.b64decode(source).decode())
+              else:
+                  target.write_text("{}")
+              PY
+
+              if [ ! -x /harness/.agent-tools/bin/uvx ]; then
+                UVX_PATH="$(command -v uvx || true)"
+                if [ -z "$UVX_PATH" ]; then
+                  echo "uvx is not installed in the harness-ai-agent image" >&2
+                  exit 1
+                fi
+                ln -sf "$UVX_PATH" /harness/.agent-tools/bin/uvx
+              fi
+              /harness/.agent-tools/bin/uvx --version
+
+              if [ ! -x /harness/.agent-tools/bin/npx ]; then
+                python3 - <<'PY'
+              import os, tarfile, urllib.request
+              url = "https://nodejs.org/dist/v20.17.0/node-v20.17.0-linux-x64.tar.xz"
+              tarball = "/tmp/node.tar.xz"
+              urllib.request.urlretrieve(url, tarball)
+              os.makedirs("/harness/.agent-tools/node", exist_ok=True)
+              with tarfile.open(tarball) as t:
+                  t.extractall("/harness/.agent-tools/node")
+              root = next(p for p in os.listdir("/harness/.agent-tools/node") if p.startswith("node-"))
+              for exe in ("node", "npm", "npx"):
+                  src = f"/harness/.agent-tools/node/{root}/bin/{exe}"
+                  dst = f"/harness/.agent-tools/bin/{exe}"
+                  if os.path.lexists(dst):
+                      os.remove(dst)
+                  os.symlink(src, dst)
+              PY
+              fi
+              /harness/.agent-tools/bin/npx --version
+              mkdir -p /harness/.agent/secrets
+              cat > /harness/.agent/secrets/harness_api_key <<'EOF'
+              ${{inputs.harness_api_key}}
+              EOF
+              cat > /harness/.agent/secrets/harness_base_url <<'EOF'
+              ${{inputs.harness_base_url}}
+              EOF
+              cat > /harness/.agent/secrets/harness_account_id <<'EOF'
+              ${{inputs.harness_account_id}}
+              EOF
+              cat > /harness/.agent/secrets/harness_org <<'EOF'
+              ${{inputs.harness_code_org}}
+              EOF
+              cat > /harness/.agent/secrets/harness_project <<'EOF'
+              ${{inputs.harness_code_project}}
+              EOF
+              chmod 0600 /harness/.agent/secrets/*
+
+              python3 - <<'PY'
+              import json
+              from pathlib import Path
+
+              secrets = Path("/harness/.agent/secrets")
+
+              def secret(name: str) -> str:
+                  path = secrets / name
+                  if not path.exists():
+                      return ""
+                  return path.read_text().strip()
+
+              UVX = "/harness/.agent-tools/bin/uvx"
+              NPX = "/harness/.agent-tools/bin/npx"
+              UV_ENV = {"UV_CACHE_DIR": "/harness/.cache/uv"}
+
+              def stdio_mcp(package: str, env: dict) -> dict:
+                  return {
+                      "type": "stdio",
+                      "command": UVX,
+                      "args": [package],
+                      "env": {**UV_ENV, **env},
+                  }
+
+              mcp_servers = {
+                  "harness_code": {
+                      "type": "stdio",
+                      "command": NPX,
+                      "args": ["-y", "harness-mcp-v2@latest"],
+                      "env": {
+                          "HARNESS_API_KEY": secret("harness_api_key"),
+                          "HARNESS_BASE_URL": secret("harness_base_url"),
+                          "HARNESS_ACCOUNT_ID": secret("harness_account_id"),
+                          "HARNESS_ORG": secret("harness_org"),
+                          "HARNESS_PROJECT": secret("harness_project"),
+                          "HARNESS_TOOLSETS": "repositories,pull-requests,pipelines,sto,scs",
+                      },
+                  },
+              }
+              path = Path("/harness/.agent/mcp-servers.json")
+              path.write_text(json.dumps(mcp_servers, indent=2) + "\n")
+              path.chmod(0o600)
+              print("Wrote MCP server config: " + ", ".join(mcp_servers))
+              PY
+
+              is_set() {
+                local value="${1:-}"
+                local unresolved_prefix
+                unresolved_prefix="$(printf '\074\053')"
+                [ -n "$value" ] &&
+                  [ "$value" != "null" ] &&
+                  [[ "$value" != "$unresolved_prefix"* ]]
+              }
+
+              TEAM_GIT_URL='${{inputs.team_skill_git_url}}'
+              TEAM_GIT_REF='${{inputs.team_skill_git_ref}}'
+              TEAM_SKILL_PATH='${{inputs.team_skill_path}}'
+              PLUGIN_GIT_TOKEN='${{inputs.plugin_git_token}}'
+              PLUGIN_GIT_USER='${{inputs.plugin_git_user}}'
+              if ! is_set "$PLUGIN_GIT_USER"; then
+                PLUGIN_GIT_USER=token
+              fi
+
+              PLUGIN_DIR=/harness/.agent/plugins/team-skills
+              PLUGIN_SRC_DIR=/tmp/team-skills-plugin-src
+              rm -rf "$PLUGIN_SRC_DIR"
+              mkdir -p "$PLUGIN_DIR/skills"
+
+              cat > "$PLUGIN_DIR/plugin.json" <<'PLUGINJSON'
+              {
+                "schemaVersion": 1,
+                "name": "harness/team-skills",
+                "displayName": "Team overlay skills",
+                "version": "0.1.0",
+                "description": "Optional team overlay. Empty when no skill pack git URL was configured."
+              }
+              PLUGINJSON
+
+              if is_set "$TEAM_GIT_URL"; then
+                if is_set "$PLUGIN_GIT_TOKEN"; then
+                  case "$TEAM_GIT_URL" in
+                    https://*@*) AUTH_URL="$TEAM_GIT_URL" ;;
+                    https://*)   AUTH_URL="https://${PLUGIN_GIT_USER}:${PLUGIN_GIT_TOKEN}@${TEAM_GIT_URL#https://}" ;;
+                    *)           AUTH_URL="$TEAM_GIT_URL" ;;
+                  esac
+                else
+                  AUTH_URL="$TEAM_GIT_URL"
+                fi
+                CLONE_REF="${TEAM_GIT_REF:-main}"
+                git clone --depth=1 --filter=blob:none --sparse \
+                  --branch "$CLONE_REF" \
+                  "$AUTH_URL" "$PLUGIN_SRC_DIR"
+                if is_set "$TEAM_SKILL_PATH"; then
+                  (cd "$PLUGIN_SRC_DIR" && git sparse-checkout set "$TEAM_SKILL_PATH")
+                  if [ ! -d "$PLUGIN_SRC_DIR/$TEAM_SKILL_PATH" ]; then
+                    echo "Sparse checkout did not produce $TEAM_SKILL_PATH" >&2
+                    exit 1
+                  fi
+                  rm -rf "$PLUGIN_DIR"
+                  cp -R "$PLUGIN_SRC_DIR/$TEAM_SKILL_PATH" "$PLUGIN_DIR"
+                else
+                  rm -rf "$PLUGIN_DIR"
+                  mkdir -p "$PLUGIN_DIR"
+                  tar -C "$PLUGIN_SRC_DIR" --exclude .git -cf - . | tar -C "$PLUGIN_DIR" -xf -
+                fi
+                echo "Fetched team skills at $PLUGIN_DIR (ref: $CLONE_REF)"
+              else
+                echo "No team skill git URL configured; running with inline guidance only."
+              fi
+            container:
+              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent-rc:local-mcp-v3
+        - name: Agent
+          id: agent
+          run:
+            container:
+              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent-rc:local-mcp-v3
+            env:
+              PLUGIN_TASK: |
+                You are a security-finding triage agent for **${{inputs.team_name}}**.
+
+                Read `/harness/.agent/context/agent-request.json` (STO/SCS finding id
+                or scan execution). Write triage to `/harness/.agent/output/summary.md`.
+
+                Atlassian cloudId: ${{inputs.atlassian_cloud_id}}
+                Jira project: ${{inputs.jira_project}}
+                create_ticket: ${{inputs.create_ticket}}
+                open_fix_pr: ${{inputs.open_fix_pr}}
+                Owned repos: ${{inputs.services}}
+
+                After reading `/harness/.agent/context/agent-request.json`, load matching
+                team skills with the Skill tool (or Read on
+                `/harness/.agent/plugins/team-skills/skills/<name>/SKILL.md`).
+                Never use Bash ls/cat/find to decide whether skills exist.
+                Team skills override the generic steps below where they conflict.
+
+                Never print secrets. If a tool fails once, record the exact error and
+                continue. Do not loop. Do not guess identifiers; name missing evidence.
+
+                Tools: Harness MCP (security_issue, pipeline_security_issue, repository,
+                file_content, pull_request), Atlassian Jira search/get, and Jira create
+                only when create_ticket is the string true. Harness Code PR only when
+                open_fix_pr is the string true AND the fix is a one-file, low-risk patch
+                you can name exactly.
+
+                Never dump secrets from findings. Never mass-close issues. Never merge.
+
+                Steps
+                1. Load skills. Fetch the finding via Harness MCP. Record severity,
+                   path, CWE/CVE, scanner, and evidence snippet.
+                2. Read the cited file at the scan ref. Confirm the finding is still
+                   present. If the file or line is gone, say so.
+                3. One JQL for similar open issues in the Jira project (same CWE/path).
+                4. Classify: exploitable | needs-review | likely-false-positive.
+                   Do not invent exploitability.
+                5. If create_ticket is true and no duplicate exists, create one Jira
+                   issue with finding id, path, and pipeline link. Otherwise skip.
+                6. If open_fix_pr is true and a one-file patch is obvious (e.g. pin a
+                   dependency, add a sanitizer already used nearby), open a branch
+                   security/<short-slug> and one PR. Otherwise skip and say why.
+
+                Output (Slack mrkdwn, ~1800 characters)
+                1. *Finding | <severity> | <path>*
+                2. *Class:* exploitable | needs-review | likely-false-positive
+                3. *Still present:* Y|N
+                4. *Jira:* existing keys, created URL, or skipped
+                5. *PR:* url or skipped
+                6. *Evidence:* 2-4 verified bullets
+                7. *Next step:* one concrete action
+              PLUGIN_MAX_TURNS: "100"
+              PLUGIN_OUTPUT_FILE: /harness/.agent/output/summary.md
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llmConnector.id}}
+              ANTHROPIC_MODEL: ${{inputs.modelName}}
+              PLUGIN_ALLOWED_TOOLS: mcp__harness_code__*,mcp__Atlassian_MCP__searchConfluenceUsingCql,mcp__Atlassian_MCP__getConfluencePage,mcp__Atlassian_MCP__searchJiraIssuesUsingJql,mcp__Atlassian_MCP__getJiraIssue,mcp__Atlassian_MCP__createJiraIssue,ToolSearch,Skill,Read,Write,Bash
+              PLUGIN_ALLOWED_DOMAINS: registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org
+              PLUGIN_MCP_SERVERS_FILE: /harness/.agent/mcp-servers.json
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>
+              PLUGIN_HARNESS_PLUGINS: /harness/.agent/plugins/team-skills
+              HARNESS_AGENT_ALLOW_CWD_PLUGINS: "1"
+              PATH: /harness/.agent-tools/bin:/harness/.agent-tools/google-cloud-sdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    mcpConnectors:
+      type: array
+      default:
+        - YOUR_ATLASSIAN_MCP_CONNECTOR
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+    agent_request_b64:
+      type: string
+    team_name:
+      type: string
+    services:
+      type: string
+    atlassian_cloud_id:
+      type: string
+    jira_project:
+      type: string
+    create_ticket:
+      type: string
+      default: "false"
+    open_fix_pr:
+      type: string
+      default: "false"
+    harness_api_key:
+      type: string
+    harness_base_url:
+      type: string
+      default: https://app.harness.io
+    harness_account_id:
+      type: string
+    harness_code_org:
+      type: string
+    harness_code_project:
+      type: string
+    team_skill_git_url:
+      type: string
+    team_skill_git_ref:
+      type: string
+      default: main
+    team_skill_path:
+      type: string
+    plugin_git_user:
+      type: string
+      default: token
+    plugin_git_token:
+      type: string
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - mcpConnectors

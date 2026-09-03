@@ -1,0 +1,281 @@
+version: 1
+agent:
+  step:
+    group:
+      steps:
+        - name: Install MCP Runtimes
+          id: install_mcp_runtimes
+          run:
+            shell: Bash
+            script: |-
+              set -euo pipefail
+
+              mkdir -p /harness/.agent-tools/bin /harness/.cache/uv \
+                       /harness/.agent /harness/.agent/context /harness/.agent/output \
+                       /harness/.agent/plugins/team-skills/skills /harness/.agent/secrets
+
+              cat > /harness/.agent/context/agent-request.b64 <<'AGENTREQUEST'
+              ${{inputs.agent_request_b64}}
+              AGENTREQUEST
+              python3 - <<'PY'
+              import base64
+              from pathlib import Path
+
+              source = Path("/harness/.agent/context/agent-request.b64").read_text().strip()
+              target = Path("/harness/.agent/context/agent-request.json")
+              if source:
+                  source += "=" * (-len(source) % 4)
+                  target.write_text(base64.b64decode(source).decode())
+              else:
+                  target.write_text("{}")
+              PY
+
+              if [ ! -x /harness/.agent-tools/bin/uvx ]; then
+                UVX_PATH="$(command -v uvx || true)"
+                if [ -z "$UVX_PATH" ]; then
+                  echo "uvx is not installed in the harness-ai-agent image" >&2
+                  exit 1
+                fi
+                ln -sf "$UVX_PATH" /harness/.agent-tools/bin/uvx
+              fi
+              /harness/.agent-tools/bin/uvx --version
+              UV_CACHE_DIR=/harness/.cache/uv timeout 120s /harness/.agent-tools/bin/uvx "mcp-grafana" --help
+              UV_CACHE_DIR=/harness/.cache/uv timeout 120s /harness/.agent-tools/bin/uvx "pagerduty-mcp" --help
+              mkdir -p /harness/.agent/secrets
+              cat > /harness/.agent/secrets/grafana_url <<'EOF'
+              ${{inputs.grafana_url}}
+              EOF
+              cat > /harness/.agent/secrets/grafana_token <<'EOF'
+              ${{inputs.grafana_token}}
+              EOF
+              cat > /harness/.agent/secrets/pagerduty_api_key <<'EOF'
+              ${{inputs.pagerduty_api_key}}
+              EOF
+              chmod 0600 /harness/.agent/secrets/*
+
+              python3 - <<'PY'
+              import json
+              from pathlib import Path
+
+              secrets = Path("/harness/.agent/secrets")
+
+              def secret(name: str) -> str:
+                  path = secrets / name
+                  if not path.exists():
+                      return ""
+                  return path.read_text().strip()
+
+              UVX = "/harness/.agent-tools/bin/uvx"
+              NPX = "/harness/.agent-tools/bin/npx"
+              UV_ENV = {"UV_CACHE_DIR": "/harness/.cache/uv"}
+
+              def stdio_mcp(package: str, env: dict) -> dict:
+                  return {
+                      "type": "stdio",
+                      "command": UVX,
+                      "args": [package],
+                      "env": {**UV_ENV, **env},
+                  }
+
+              mcp_servers = {
+                  "grafana": stdio_mcp(
+                      "mcp-grafana",
+                      {
+                          "GRAFANA_URL": secret("grafana_url"),
+                          "GRAFANA_SERVICE_ACCOUNT_TOKEN": secret("grafana_token"),
+                      },
+                  ),
+                  "pagerduty": stdio_mcp(
+                      "pagerduty-mcp",
+                      {"PAGERDUTY_USER_API_KEY": secret("pagerduty_api_key")},
+                  ),
+              }
+              path = Path("/harness/.agent/mcp-servers.json")
+              path.write_text(json.dumps(mcp_servers, indent=2) + "\n")
+              path.chmod(0o600)
+              print("Wrote MCP server config: " + ", ".join(mcp_servers))
+              PY
+
+              is_set() {
+                local value="${1:-}"
+                local unresolved_prefix
+                unresolved_prefix="$(printf '\074\053')"
+                [ -n "$value" ] &&
+                  [ "$value" != "null" ] &&
+                  [[ "$value" != "$unresolved_prefix"* ]]
+              }
+
+              TEAM_GIT_URL='${{inputs.team_skill_git_url}}'
+              TEAM_GIT_REF='${{inputs.team_skill_git_ref}}'
+              TEAM_SKILL_PATH='${{inputs.team_skill_path}}'
+              PLUGIN_GIT_TOKEN='${{inputs.plugin_git_token}}'
+              PLUGIN_GIT_USER='${{inputs.plugin_git_user}}'
+              if ! is_set "$PLUGIN_GIT_USER"; then
+                PLUGIN_GIT_USER=token
+              fi
+
+              PLUGIN_DIR=/harness/.agent/plugins/team-skills
+              PLUGIN_SRC_DIR=/tmp/team-skills-plugin-src
+              rm -rf "$PLUGIN_SRC_DIR"
+              mkdir -p "$PLUGIN_DIR/skills"
+
+              cat > "$PLUGIN_DIR/plugin.json" <<'PLUGINJSON'
+              {
+                "schemaVersion": 1,
+                "name": "harness/team-skills",
+                "displayName": "Team overlay skills",
+                "version": "0.1.0",
+                "description": "Optional team overlay. Empty when no skill pack git URL was configured."
+              }
+              PLUGINJSON
+
+              if is_set "$TEAM_GIT_URL"; then
+                if is_set "$PLUGIN_GIT_TOKEN"; then
+                  case "$TEAM_GIT_URL" in
+                    https://*@*) AUTH_URL="$TEAM_GIT_URL" ;;
+                    https://*)   AUTH_URL="https://${PLUGIN_GIT_USER}:${PLUGIN_GIT_TOKEN}@${TEAM_GIT_URL#https://}" ;;
+                    *)           AUTH_URL="$TEAM_GIT_URL" ;;
+                  esac
+                else
+                  AUTH_URL="$TEAM_GIT_URL"
+                fi
+                CLONE_REF="${TEAM_GIT_REF:-main}"
+                git clone --depth=1 --filter=blob:none --sparse \
+                  --branch "$CLONE_REF" \
+                  "$AUTH_URL" "$PLUGIN_SRC_DIR"
+                if is_set "$TEAM_SKILL_PATH"; then
+                  (cd "$PLUGIN_SRC_DIR" && git sparse-checkout set "$TEAM_SKILL_PATH")
+                  if [ ! -d "$PLUGIN_SRC_DIR/$TEAM_SKILL_PATH" ]; then
+                    echo "Sparse checkout did not produce $TEAM_SKILL_PATH" >&2
+                    exit 1
+                  fi
+                  rm -rf "$PLUGIN_DIR"
+                  cp -R "$PLUGIN_SRC_DIR/$TEAM_SKILL_PATH" "$PLUGIN_DIR"
+                else
+                  rm -rf "$PLUGIN_DIR"
+                  mkdir -p "$PLUGIN_DIR"
+                  tar -C "$PLUGIN_SRC_DIR" --exclude .git -cf - . | tar -C "$PLUGIN_DIR" -xf -
+                fi
+                echo "Fetched team skills at $PLUGIN_DIR (ref: $CLONE_REF)"
+              else
+                echo "No team skill git URL configured; running with inline guidance only."
+              fi
+            container:
+              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent-rc:local-mcp-v3
+        - name: Agent
+          id: agent
+          run:
+            container:
+              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent-rc:local-mcp-v3
+            env:
+              PLUGIN_TASK: |
+                You are an incident customer-comms drafter for **${{inputs.team_name}}**.
+
+                Read `/harness/.agent/context/agent-request.json` (PagerDuty incident
+                id, severity, optional Grafana links). Write internal and customer
+                drafts to `/harness/.agent/output/summary.md`.
+
+                Atlassian cloudId: ${{inputs.atlassian_cloud_id}}
+                Confluence status template page id or title: ${{inputs.status_template}}
+                Severity: ${{inputs.severity}}
+
+                After reading `/harness/.agent/context/agent-request.json`, load matching
+                team skills with the Skill tool (or Read on
+                `/harness/.agent/plugins/team-skills/skills/<name>/SKILL.md`).
+                Never use Bash ls/cat/find to decide whether skills exist.
+                Team skills override the generic steps below where they conflict.
+
+                Never print secrets. If a tool fails once, record the exact error and
+                continue. Do not loop. Do not guess identifiers; name missing evidence.
+
+                Tools: PagerDuty read (get incident, alerts, notes, log entries),
+                Grafana bounded impact queries when a rule UID exists, Confluence
+                getConfluencePage for the template. Never mutate PagerDuty, Grafana,
+                Confluence, or Jira. Never page anyone. Do not post to Slack (pipeline
+                posts). Do not publish a status page.
+
+                Customer text must not include hostnames, IPs, customer names beyond
+                what the template allows, stack traces, or internal channel names.
+
+                Steps
+                1. Load skills (tone, banned phrases, template). Fetch the pinned PD
+                   incident only.
+                2. Fetch the Confluence status template. Follow its sections.
+                3. Optional Grafana: confirm impact window only. Skip if unmapped.
+                4. Draft two blocks in the output file.
+
+                Output (Slack mrkdwn, ~1800 characters total, no JSON/code fences)
+                1. *Comms | <incident> | <severity> | <service>*
+                2. *Internal* paragraph (what, impact, next update time)
+                3. *Customer* paragraph (symptoms, workaround, next update; no internals)
+                4. *Do not send yet:* any missing evidence that would make the customer
+                   draft speculative
+              PLUGIN_MAX_TURNS: "80"
+              PLUGIN_OUTPUT_FILE: /harness/.agent/output/summary.md
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llmConnector.id}}
+              ANTHROPIC_MODEL: ${{inputs.modelName}}
+              PLUGIN_ALLOWED_TOOLS: mcp__grafana__*,mcp__pagerduty__*,mcp__Atlassian_MCP__searchConfluenceUsingCql,mcp__Atlassian_MCP__getConfluencePage,mcp__Atlassian_MCP__searchJiraIssuesUsingJql,mcp__Atlassian_MCP__getJiraIssue,ToolSearch,Skill,Read,Write,Bash
+              PLUGIN_ALLOWED_DOMAINS: monitoring.example.com,api.pagerduty.com,registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org
+              PLUGIN_MCP_SERVERS_FILE: /harness/.agent/mcp-servers.json
+              PLUGIN_MCP_FORMAT: harness
+              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>
+              PLUGIN_HARNESS_PLUGINS: /harness/.agent/plugins/team-skills
+              HARNESS_AGENT_ALLOW_CWD_PLUGINS: "1"
+              PATH: /harness/.agent-tools/bin:/harness/.agent-tools/google-cloud-sdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    mcpConnectors:
+      type: array
+      default:
+        - YOUR_ATLASSIAN_MCP_CONNECTOR
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+    agent_request_b64:
+      type: string
+    team_name:
+      type: string
+    atlassian_cloud_id:
+      type: string
+    status_template:
+      type: string
+    severity:
+      type: string
+    grafana_url:
+      type: string
+    grafana_token:
+      type: string
+    pagerduty_api_key:
+      type: string
+    team_skill_git_url:
+      type: string
+    team_skill_git_ref:
+      type: string
+      default: main
+    team_skill_path:
+      type: string
+    plugin_git_user:
+      type: string
+      default: token
+    plugin_git_token:
+      type: string
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - mcpConnectors
