@@ -9,6 +9,7 @@
     "sync:marketplace": "node scripts/sync-marketplace.mjs && npm run generate:pipelines",
     "generate:pipelines": "node scripts/generate-pipeline-samples.mjs",
     "preview": "vite preview",
+    "start": "vite preview --host 0.0.0.0 --port 3000",
     "validate:catalog": "node scripts/validate-catalog.mjs"
   },
   "dependencies": {
