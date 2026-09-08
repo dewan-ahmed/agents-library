@@ -85,6 +85,34 @@
       "pipelineIdentifier": "containerVulnRemediation",
       "agentFile": "catalog/agents/ca_container_vuln_remediation.yaml",
       "pipelineFile": "catalog/pipelines/container-vuln-remediation.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_hardcoded_secret_auditor",
+      "pipelineId": "hardcoded-secret-auditor",
+      "pipelineIdentifier": "hardcodedSecretAuditor",
+      "agentFile": "catalog/agents/ca_hardcoded_secret_auditor.yaml",
+      "pipelineFile": "catalog/pipelines/hardcoded-secret-auditor.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_deployment_rollback_gap",
+      "pipelineId": "deployment-rollback-gap",
+      "pipelineIdentifier": "deploymentRollbackGap",
+      "agentFile": "catalog/agents/ca_deployment_rollback_gap.yaml",
+      "pipelineFile": "catalog/pipelines/deployment-rollback-gap.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_native_step_migration",
+      "pipelineId": "native-step-migration",
+      "pipelineIdentifier": "nativeStepMigration",
+      "agentFile": "catalog/agents/ca_native_step_migration.yaml",
+      "pipelineFile": "catalog/pipelines/native-step-migration.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_pipeline_template_duplication",
+      "pipelineId": "pipeline-template-duplication",
+      "pipelineIdentifier": "pipelineTemplateDuplication",
+      "agentFile": "catalog/agents/ca_pipeline_template_duplication.yaml",
+      "pipelineFile": "catalog/pipelines/pipeline-template-duplication.pipeline.yaml"
     }
   ]
 }

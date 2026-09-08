@@ -27,8 +27,9 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 
 ## What is in this version
 
-- Homepage chat/search across 31 Harness-managed marketplace agents plus 12 curated custom agents
-- Browse `/agents` and all 43 corresponding pipeline samples with filters, including an **enterprise** use-case filter for the customer worker agents
+- Homepage chat/search across 31 Harness-managed marketplace agents plus 16 curated custom agents
+- Browse `/agents` and all 47 corresponding pipeline samples with filters, including an **enterprise** use-case filter for the customer worker agents
+- **Lifecycle** cloud at `/lifecycle` showing how many agents contribute to each delivery stage
 - Optional account / org / project IDs in the browser only
 - **Open in Harness** using each agent's `type=system` or `type=custom`
 - **Copy YAML** with `{{orgId}}` / `{{projectId}}` substitution
@@ -72,6 +73,14 @@ The first five share one architecture:
 Replace `YOUR_LLM_CONNECTOR`, `YOUR_MODEL_ID`, and `YOUR_ATLASSIAN_MCP_CONNECTOR`
 before use. End-to-end setup, request JSON examples, and which writes are
 flag-gated are in [docs/customer-agent-usage.md](docs/customer-agent-usage.md).
+
+## Governance auditors
+
+Four additional custom agents are read-only Harness MCP scanners (not tagged
+`enterprise`): hardcoded values / inline secrets, production CD rollback gaps,
+native-step migration, and pipeline/template duplication. Replace
+`YOUR_HARNESS_MCP_CONNECTOR` before use. They never create or update Harness
+resources.
 
 ## Validate the catalog
 

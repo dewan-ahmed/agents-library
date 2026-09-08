@@ -24,6 +24,7 @@ export function AgentDetailPage({ scope }: { scope: HarnessScope }) {
     <div className="page">
       <div className="kicker">
         {ownershipLabel(agent.ownership)} · {agent.scope} · v{agent.version}
+        {agent.author ? ` · ${agent.author}` : ""}
         {useCasesOf(agent).includes("enterprise") ? " · enterprise" : ""}
       </div>
       <div className="detail-head">

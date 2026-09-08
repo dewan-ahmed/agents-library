@@ -18,11 +18,18 @@ export function AboutPage() {
         <ul className="list">
           <li>Describe a problem on the homepage to match agents and copyable pipeline YAML.</li>
           <li>
+            Open <strong>Lifecycle</strong> for a cloud of agent counts by delivery stage (build, deploy, and the rest).
+          </li>
+          <li>
             Browse agents and pipelines, including a <strong>use case</strong> filter. {enterpriseAgents} agents and{" "}
             {enterprisePipelines} pipelines are tagged <code>enterprise</code>.
           </li>
           <li>Copy pipeline YAML with <code>{"{{orgId}}"}</code> / <code>{"{{projectId}}"}</code> substitution.</li>
           <li>Open an agent in the Harness console after you set account, org, and project IDs in this browser.</li>
+          <li>
+            Custom agents show an author. Governance auditors need a Harness MCP connector (
+            <code>YOUR_HARNESS_MCP_CONNECTOR</code>) and are read-only against your account.
+          </li>
         </ul>
       </div>
       <div className="section">

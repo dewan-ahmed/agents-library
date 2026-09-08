@@ -1,0 +1,77 @@
+pipeline:
+  name: Native Step Migration Advisor
+  identifier: nativeStepMigration
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  variables:
+    - name: llmConnector
+      type: String
+      description: Account, org, or project LLM connector reference.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier exposed by your LLM connector.
+      required: true
+      value: <+input>
+    - name: mcpConnectors
+      type: String
+      description: Harness MCP connector identifier, for example YOUR_HARNESS_MCP_CONNECTOR.
+      required: true
+      value: <+input>
+    - name: scopeOrgId
+      type: String
+      description: Org identifier to scan. Leave empty with an empty project id to scan the account.
+      required: false
+      value: <+input>
+    - name: scopeProjectId
+      type: String
+      description: Project identifier to scan. Requires scopeOrgId when set.
+      required: false
+      value: <+input>
+    - name: includeCategories
+      type: String
+      description: Comma-separated Step 2 category names, or all.
+      required: true
+      value: <+input>.default(all)
+    - name: maxPipelinesToScan
+      type: String
+      description: Maximum number of pipelines to deep-scan this run.
+      required: true
+      value: <+input>.default(200)
+  stages:
+    - stage:
+        name: Advise Native Step Migration
+        identifier: advise_native_step_migration
+        type: CI
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Native Step Migration Advisor
+                  identifier: native_step_migration
+                  spec:
+                    agentName: ca_native_step_migration
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+                      mcpConnectors: <+pipeline.variables.mcpConnectors>
+                      scopeOrgId: <+pipeline.variables.scopeOrgId>
+                      scopeProjectId: <+pipeline.variables.scopeProjectId>
+                      includeCategories: <+pipeline.variables.includeCategories>
+                      maxPipelinesToScan: <+pipeline.variables.maxPipelinesToScan>

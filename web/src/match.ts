@@ -55,6 +55,7 @@ export function matchCatalog(query: string): MatchResult {
         { text: agent.lifecycle.join(" "), weight: 2, label: "lifecycle" },
         { text: agent.triggers.join(" "), weight: 2, label: "trigger" },
         { text: (agent.useCases ?? []).join(" "), weight: 3, label: "use case" },
+        { text: (agent.author ?? "").toLowerCase(), weight: 2, label: "author" },
       ]);
       return { agent, score, reasons };
     })

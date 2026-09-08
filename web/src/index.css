@@ -116,7 +116,7 @@ button, input, textarea, select { font: inherit; }
   background: var(--bg);
 }
 .chip { cursor: pointer; }
-.chip:hover, .pill.active { border-color: var(--blue-5); color: var(--blue-7); background: var(--blue-1); }
+.chip:hover, .chip.active, .pill.active { border-color: var(--blue-5); color: var(--blue-7); background: var(--blue-1); }
 .btn {
   border: 0;
   border-radius: 6px;
@@ -136,6 +136,7 @@ button, input, textarea, select { font: inherit; }
 .btn.secondary:hover { background: var(--bg-2); }
 .btn.ghost { background: transparent; color: var(--blue-7); padding-inline: 8px; }
 .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .card {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -259,8 +260,75 @@ pre {
 .list { margin: 8px 0 0; padding-left: 18px; color: var(--text-2); }
 .layout-top { position: relative; }
 
+.page-wide { width: min(1180px, calc(100% - 40px)); }
+.life-cloud {
+  position: relative;
+  margin-top: 28px;
+  min-height: 540px;
+  border-radius: 24px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 18% 30%, rgba(0, 173, 228, 0.28), transparent 42%),
+    radial-gradient(ellipse at 82% 70%, rgba(124, 92, 191, 0.22), transparent 46%),
+    radial-gradient(ellipse at 50% 100%, rgba(2, 120, 213, 0.2), transparent 40%),
+    linear-gradient(165deg, #07182b 0%, #0a3364 58%, #07182b 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.life-mist {
+  pointer-events: none;
+  position: absolute;
+  inset: -20%;
+  background:
+    radial-gradient(circle at 30% 40%, rgba(255, 255, 255, 0.08), transparent 28%),
+    radial-gradient(circle at 70% 35%, rgba(61, 199, 246, 0.12), transparent 24%);
+  animation: mist-drift 18s ease-in-out infinite alternate;
+}
+.life-svg {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: min(620px, 72vh);
+}
+.life-bubble {
+  cursor: pointer;
+  outline: none;
+  animation: bubble-float 7s ease-in-out infinite;
+}
+.life-bubble circle:first-child {
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
+  transition: fill-opacity 160ms ease;
+}
+.life-bubble.is-on circle:first-child {
+  filter: drop-shadow(0 0 22px rgba(255, 255, 255, 0.28));
+}
+.life-bubble:focus-visible circle:first-child {
+  stroke: #ffffff;
+  stroke-width: 3;
+}
+.life-word, .life-count {
+  fill: #ffffff;
+  text-anchor: middle;
+  pointer-events: none;
+  font-family: Geist, Inter, "Segoe UI", system-ui, sans-serif;
+}
+.life-word { font-weight: 600; letter-spacing: 0.02em; }
+.life-count { font-weight: 600; fill: rgba(255, 255, 255, 0.92); }
+@keyframes bubble-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+@keyframes mist-drift {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(3%, 2%, 0) scale(1.06); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .life-bubble, .life-mist { animation: none; }
+}
+
 @media (max-width: 800px) {
-  .grid { grid-template-columns: 1fr; }
+  .grid, .grid-3 { grid-template-columns: 1fr; }
   .browse { flex-direction: column; }
   .filters { width: 100%; }
   .hero h1 { font-size: 28px; }

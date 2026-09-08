@@ -19,6 +19,7 @@ export function AgentCard({ agent }: { agent: Agent }) {
       <ConfigSummary items={agent.configuration} />
       <div className="card-foot">
         <span className="pill">{agent.scope}</span>
+        {agent.author && <span className="muted">{agent.author}</span>}
         <span className="muted">v{agent.version}</span>
       </div>
     </article>

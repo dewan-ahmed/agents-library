@@ -68,7 +68,7 @@ const referencedAgentIds = new Set();
 for (const agent of catalog.agents) {
   if (!agentDocs.has(agent.id)) errors.push(`catalog.json: agent ${agent.id} has no catalog/agents/${agent.id}.yaml`);
   if (agent.harnessAgentId !== agent.id) warnings.push(`catalog.json: agent ${agent.id} harnessAgentId differs (${agent.harnessAgentId})`);
-  for (const field of ["name", "summary", "description", "ownership", "linkType", "version"]) {
+  for (const field of ["name", "summary", "description", "ownership", "linkType", "version", "author"]) {
     if (!agent[field]) errors.push(`catalog.json: agent ${agent.id} missing ${field}`);
   }
 }

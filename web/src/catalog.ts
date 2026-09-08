@@ -30,6 +30,7 @@ export type Agent = {
   triggers: string[];
   scope: string;
   version: string;
+  author?: string;
   availability?: "available" | "coming_soon";
   useCases?: string[];
   inputs: string[];
@@ -100,4 +101,54 @@ export function ownershipLabel(ownership: Ownership) {
 
 export function useCasesOf(item: { useCases?: string[] }) {
   return item.useCases ?? [];
+}
+
+export const lifecycleLabels: Record<string, string> = {
+  plan: "Plan",
+  build: "Build",
+  test: "Test",
+  release: "Deploy",
+  secure: "Secure",
+  govern: "Govern",
+  monitor: "Monitor",
+  cost: "Cost",
+};
+
+export const lifecycleColors: Record<string, string> = {
+  plan: "#7c5cbf",
+  build: "#00ade4",
+  test: "#3dc7f6",
+  release: "#0278d5",
+  secure: "#ef6b4c",
+  govern: "#004ba4",
+  monitor: "#2bb673",
+  cost: "#e8a317",
+};
+
+export function lifecycleLabel(key: string) {
+  return lifecycleLabels[key] ?? key.replaceAll("_", " ");
+}
+
+export function lifecycleColor(key: string) {
+  return lifecycleColors[key] ?? "#0278d5";
+}
+
+export function agentsGroupedByLifecycle(list = agents) {
+  const groups = new Map<string, Agent[]>();
+  for (const agent of list) {
+    for (const key of agent.lifecycle) {
+      const bucket = groups.get(key) ?? [];
+      bucket.push(agent);
+      groups.set(key, bucket);
+    }
+  }
+  return [...groups.entries()]
+    .map(([key, members]) => ({
+      key,
+      label: lifecycleLabel(key),
+      color: lifecycleColor(key),
+      count: members.length,
+      agents: members,
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }

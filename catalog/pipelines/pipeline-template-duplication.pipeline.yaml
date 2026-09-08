@@ -1,0 +1,98 @@
+pipeline:
+  name: Pipeline Template Duplication
+  identifier: pipelineTemplateDuplication
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  variables:
+    - name: llmConnector
+      type: String
+      description: Account, org, or project LLM connector reference.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier exposed by your LLM connector.
+      required: true
+      value: <+input>
+    - name: mcpConnectors
+      type: String
+      description: Harness MCP connector identifier, for example YOUR_HARNESS_MCP_CONNECTOR.
+      required: true
+      value: <+input>
+    - name: scopeOrgId
+      type: String
+      description: Required org identifier. This agent refuses an account-wide scan.
+      required: true
+      value: <+input>
+    - name: scopeProjectId
+      type: String
+      description: Optional project identifier to narrow the org scan.
+      required: false
+      value: <+input>
+    - name: minSimilarity
+      type: String
+      description: Jaccard threshold for near-duplicate clusters, from 0 to 1.
+      required: true
+      value: <+input>.default(0.85)
+    - name: maxPipelinesToScan
+      type: String
+      required: true
+      value: <+input>.default(300)
+    - name: maxTemplatesToScan
+      type: String
+      required: true
+      value: <+input>.default(150)
+  stages:
+    - stage:
+        name: Find Duplicate Pipelines
+        identifier: find_duplicate_pipelines
+        type: CI
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Agent
+                  name: Pipeline Template Duplication
+                  identifier: pipeline_template_duplication
+                  spec:
+                    agentName: ca_pipeline_template_duplication
+                    agentSettings:
+                      llmConnector: <+pipeline.variables.llmConnector>
+                      modelName: <+pipeline.variables.modelName>
+                      mcpConnectors: <+pipeline.variables.mcpConnectors>
+                      scopeOrgId: <+pipeline.variables.scopeOrgId>
+                      scopeProjectId: <+pipeline.variables.scopeProjectId>
+                      minSimilarity: <+pipeline.variables.minSimilarity>
+                      maxPipelinesToScan: <+pipeline.variables.maxPipelinesToScan>
+                      maxTemplatesToScan: <+pipeline.variables.maxTemplatesToScan>
+              - step:
+                  type: Run
+                  name: Export Consolidation Output
+                  identifier: export_consolidation_output
+                  spec:
+                    shell: Sh
+                    command: |
+                      if [ -d /harness/consolidation-output ]; then
+                        echo "=== /harness/consolidation-output ==="
+                        ls -la /harness/consolidation-output
+                        if [ -f /harness/consolidation-output/report.md ]; then
+                          echo "=== report.md ==="
+                          cat /harness/consolidation-output/report.md
+                        fi
+                      else
+                        echo "No /harness/consolidation-output directory was written."
+                      fi

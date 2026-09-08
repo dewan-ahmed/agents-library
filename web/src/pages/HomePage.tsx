@@ -65,7 +65,7 @@ export function HomePage({ scope }: { scope: HarnessScope }) {
       ) : (
         <div className="section">
           <h2>Or browse the library</h2>
-          <div className="grid">
+          <div className="grid grid-3">
             <div className="card">
               <h3>Agents</h3>
               <p>{agents.length} curated worker agents you can explore and open in Harness.</p>
@@ -75,6 +75,11 @@ export function HomePage({ scope }: { scope: HarnessScope }) {
               <h3>Pipelines</h3>
               <p>{pipelines.length} example pipelines that call those agents. Copy the YAML and paste it in Harness.</p>
               <Link to="/pipelines">Browse all pipelines</Link>
+            </div>
+            <div className="card">
+              <h3>Lifecycle</h3>
+              <p>See how many agents contribute to build, deploy, secure, and the rest of the delivery cloud.</p>
+              <Link to="/lifecycle">Open the lifecycle cloud</Link>
             </div>
           </div>
           <div className="grid" style={{ marginTop: 16 }}>

@@ -30,6 +30,9 @@ export function Topbar({
         <span>AI Agents Library</span>
       </NavLink>
       <nav className="nav">
+        <NavLink to="/lifecycle" className={({ isActive }) => (isActive ? "active" : "")}>
+          Lifecycle
+        </NavLink>
         <NavLink to="/agents" className={({ isActive }) => (isActive ? "active" : "")}>
           Agents
         </NavLink>
