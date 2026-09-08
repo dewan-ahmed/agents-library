@@ -1,0 +1,45 @@
+pipeline:
+  name: Validate Custom Catalog Combos
+  identifier: validateCustomCatalogCombos
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  stages:
+    - stage:
+        name: Validate Custom Combos
+        identifier: validate_custom_combos
+        type: CI
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Validate custom agent pipeline combos
+                  identifier: validate_catalog
+                  spec:
+                    image: node:20
+                    shell: Sh
+                    command: |
+                      set -e
+                      cd web
+                      npm ci
+                      node scripts/validate-catalog.mjs
+                      echo "Validated $(node -e 'const c=require("../catalog/test/combos.json"); console.log(c.combos.length)') custom agent+pipeline combos. Marketplace samples are excluded."

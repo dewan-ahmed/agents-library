@@ -1,10 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
-import { agents } from "../catalog";
+import { agents, useCasesOf } from "../catalog";
 import { AgentCard } from "../components/Cards";
 import { EmptyHint, FilterRail, toggleFacet, useFacetFilter } from "../components/Filters";
 
-function values(field: "ownership" | "lifecycle" | "triggers" | "modules" | "availability") {
+function values(field: "ownership" | "lifecycle" | "triggers" | "modules" | "availability" | "useCases") {
   return [...new Set(agents.flatMap((agent) => {
+    if (field === "useCases") return useCasesOf(agent);
     const value = agent[field];
     return Array.isArray(value) ? value : [value ?? "available"];
   }))].sort();
@@ -18,6 +19,7 @@ export function AgentsPage() {
     { key: "lifecycle", label: "Lifecycle", options: values("lifecycle") },
     { key: "trigger", label: "Trigger", options: values("triggers") },
     { key: "module", label: "Module", options: values("modules") },
+    { key: "useCase", label: "Use case", options: values("useCases") },
   ], []);
   const getValues = useCallback((agent: (typeof agents)[number], key: string) => {
     if (key === "ownership") return [agent.ownership];
@@ -25,6 +27,7 @@ export function AgentsPage() {
     if (key === "lifecycle") return agent.lifecycle;
     if (key === "trigger") return agent.triggers;
     if (key === "module") return agent.modules;
+    if (key === "useCase") return useCasesOf(agent);
     return [];
   }, []);
   const filtered = useFacetFilter(agents, selected, getValues);
@@ -35,7 +38,7 @@ export function AgentsPage() {
       <h1 style={{ marginTop: 8 }}>Worker Agents</h1>
       <p className="lede">
         Browse Harness-managed marketplace agents and the curated custom examples. Filter by
-        lifecycle, trigger, module, ownership, or availability.
+        lifecycle, trigger, module, ownership, availability, or use case.
       </p>
       <div className="browse" style={{ marginTop: 28 }}>
         <FilterRail

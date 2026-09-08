@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "sync:marketplace": "node scripts/sync-marketplace.mjs && npm run generate:pipelines",
     "generate:pipelines": "node scripts/generate-pipeline-samples.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "validate:catalog": "node scripts/validate-catalog.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

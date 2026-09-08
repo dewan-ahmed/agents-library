@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { agentById, ownershipLabel, pipelinesForAgent, yamlForPipeline } from "../catalog";
+import { agentById, ownershipLabel, pipelinesForAgent, useCasesOf, yamlForPipeline } from "../catalog";
 import { agentConsoleUrl, applyYamlScope, scopeComplete, type HarnessScope } from "../scope";
 import { YamlBlock } from "../components/YamlBlock";
 import { ConfigChecklist } from "../components/ConfigChecklist";
@@ -22,7 +22,10 @@ export function AgentDetailPage({ scope }: { scope: HarnessScope }) {
 
   return (
     <div className="page">
-      <div className="kicker">{ownershipLabel(agent.ownership)} · {agent.scope} · v{agent.version}</div>
+      <div className="kicker">
+        {ownershipLabel(agent.ownership)} · {agent.scope} · v{agent.version}
+        {useCasesOf(agent).includes("enterprise") ? " · enterprise" : ""}
+      </div>
       <div className="detail-head">
         <div>
           <h1 style={{ margin: "8px 0" }}>{agent.name}</h1>

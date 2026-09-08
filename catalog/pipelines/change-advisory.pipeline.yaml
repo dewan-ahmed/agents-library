@@ -1,0 +1,308 @@
+pipeline:
+  name: Change Advisory Go No-Go
+  identifier: changeAdvisory
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  variables:
+    - name: llmConnector
+      type: String
+      description: Account, org, or project LLM connector reference, for example account.harnessAnthropic.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier your LLM connector exposes.
+      required: true
+      value: <+input>
+    - name: team_name
+      type: String
+      required: true
+      value: <+input>
+    - name: request_json
+      type: String
+      description: JSON request payload for this agent. See the usage guide for the shape.
+      required: true
+      value: <+input>
+    - name: confluence_space
+      type: String
+      description: Confluence space key holding the CAB checklist. Leave empty to skip Confluence.
+      required: false
+      value: <+input>
+    - name: jira_project
+      type: String
+      description: Jira project searched for unresolved risks. Leave empty to skip Jira.
+      required: false
+      value: <+input>
+    - name: atlassian_cloud_id
+      type: String
+      description: Atlassian cloudId, required only when using Confluence or Jira.
+      required: false
+      value: <+input>
+    - name: harness_api_key_secret
+      type: String
+      description: Expression that resolves to a Harness PAT, for example <+secrets.getValue("harness_pat")>.
+      required: true
+      value: <+input>
+    - name: harness_base_url
+      type: String
+      required: true
+      value: <+input>.default(https://app.harness.io)
+    - name: harness_account_id
+      type: String
+      required: true
+      value: <+input>
+    - name: harness_org
+      type: String
+      required: true
+      value: <+input>
+    - name: harness_project
+      type: String
+      required: true
+      value: <+input>
+    - name: slack_channel_id
+      type: String
+      description: Slack channel id. Leave empty to skip posting.
+      required: false
+      value: <+input>
+    - name: slack_thread_ts
+      type: String
+      description: Slack permalink or thread timestamp to reply in.
+      required: false
+      value: <+input>
+    - name: slack_bot_token_secret
+      type: String
+      description: Expression that resolves to a Slack bot token with chat:write.
+      required: false
+      value: <+input>
+    - name: team_skill_git_url
+      type: String
+      description: Optional git repo holding a team skill pack.
+      required: false
+      value: <+input>
+    - name: team_skill_git_ref
+      type: String
+      required: false
+      value: <+input>.default(main)
+    - name: team_skill_path
+      type: String
+      required: false
+      value: <+input>
+    - name: plugin_git_user
+      type: String
+      required: false
+      value: <+input>.default(token)
+    - name: plugin_git_token_secret
+      type: String
+      description: Expression that resolves to a git PAT for the skill pack checkout.
+      required: false
+      value: <+input>
+  stages:
+    - stage:
+        name: Run Agent
+        identifier: Run_Agent
+        type: CI
+        spec:
+          cloneCodebase: false
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Prepare Request
+                  identifier: prepare_request
+                  timeout: 5m
+                  spec:
+                    shell: Bash
+                    envVariables:
+                      REQUEST_JSON: <+pipeline.variables.request_json>
+                    command: |-
+                      set -euo pipefail
+                      PREPARED_OUTPUT="$(python3 - <<'PY'
+                      import base64, json, os, sys
+
+                      unresolved_prefix = chr(60) + chr(43)
+
+
+                      def configured(name):
+                          value = (os.environ.get(name) or "").strip()
+                          if not value or value == "null" or value.startswith(unresolved_prefix):
+                              return ""
+                          return value
+
+
+                      raw = configured("REQUEST_JSON")
+                      if not raw:
+                          print("request_json is required", file=sys.stderr)
+                          sys.exit(1)
+                      try:
+                          body = json.loads(raw)
+                          if isinstance(body, str):
+                              body = json.loads(body)
+                      except json.JSONDecodeError as exc:
+                          print("request_json is not valid JSON: " + str(exc), file=sys.stderr)
+                          sys.exit(1)
+                      if not isinstance(body, dict):
+                          print("request_json must be a JSON object", file=sys.stderr)
+                          sys.exit(1)
+                      encoded = base64.b64encode(json.dumps(body, separators=(",", ":")).encode()).decode()
+                      print("REQUEST_B64=" + encoded)
+                      PY
+                      )"
+                      printf '%s\n' "$PREPARED_OUTPUT"
+                      REQUEST_B64=""
+                      while IFS='=' read -r name value; do
+                        case "$name" in
+                          REQUEST_B64) REQUEST_B64="$value" ;;
+                        esac
+                      done <<EOF
+                      $PREPARED_OUTPUT
+                      EOF
+                      if [ -z "$REQUEST_B64" ]; then
+                        echo "Prepare step failed to produce REQUEST_B64" >&2
+                        exit 1
+                      fi
+                      export REQUEST_B64
+                    outputVariables:
+                      - name: REQUEST_B64
+                        type: String
+                        value: REQUEST_B64
+              - step:
+                  type: Agent
+                  name: Run Change Advisory
+                  identifier: run_agent_step
+                  timeout: 40m
+                  spec:
+                    agentName: ca_change_advisory
+                    agentSettings: |-
+                      {
+                        "llmConnector": "<+pipeline.variables.llmConnector>",
+                        "team_name": "<+pipeline.variables.team_name>",
+                        "modelName": "<+pipeline.variables.modelName>",
+                        "agent_request_b64": "<+execution.steps.prepare_request.output.outputVariables.REQUEST_B64>",
+                        "confluence_space": "<+pipeline.variables.confluence_space>",
+                        "jira_project": "<+pipeline.variables.jira_project>",
+                        "atlassian_cloud_id": "<+pipeline.variables.atlassian_cloud_id>",
+                        "harness_api_key": "<+pipeline.variables.harness_api_key_secret>",
+                        "harness_base_url": "<+pipeline.variables.harness_base_url>",
+                        "harness_account_id": "<+pipeline.variables.harness_account_id>",
+                        "harness_org": "<+pipeline.variables.harness_org>",
+                        "harness_project": "<+pipeline.variables.harness_project>",
+                        "team_skill_git_url": "<+pipeline.variables.team_skill_git_url>",
+                        "team_skill_git_ref": "<+pipeline.variables.team_skill_git_ref>",
+                        "team_skill_path": "<+pipeline.variables.team_skill_path>",
+                        "plugin_git_user": "<+pipeline.variables.plugin_git_user>",
+                        "plugin_git_token": "<+pipeline.variables.plugin_git_token_secret>"
+                      }
+              - step:
+                  type: Run
+                  name: Export Summary
+                  identifier: export_summary
+                  timeout: 5m
+                  spec:
+                    shell: Bash
+                    command: |-
+                      set -euo pipefail
+                      SUMMARY_FILE="/harness/.agent/output/summary.md"
+                      if [ ! -s "$SUMMARY_FILE" ]; then
+                        echo "Missing or empty summary at $SUMMARY_FILE" >&2
+                        ls -la /harness/.agent/output || true
+                        exit 1
+                      fi
+                      echo "--- Agent summary ---"
+                      cat "$SUMMARY_FILE"
+                      echo "--- End summary ---"
+                      SUMMARY_B64="$(python3 -c 'import base64,pathlib; print(base64.b64encode(pathlib.Path("/harness/.agent/output/summary.md").read_bytes()).decode(), end="")')"
+                      echo "SUMMARY_B64=${SUMMARY_B64}"
+                    outputVariables:
+                      - name: SUMMARY_B64
+                        type: String
+                        value: SUMMARY_B64
+              - step:
+                  type: Run
+                  name: Post Summary To Slack
+                  identifier: post_summary_to_slack
+                  timeout: 5m
+                  when:
+                    stageStatus: Success
+                    condition: <+pipeline.variables.slack_thread_ts> != "" || <+pipeline.variables.slack_channel_id> != ""
+                  spec:
+                    shell: Bash
+                    envVariables:
+                      SLACK_BOT_TOKEN: <+pipeline.variables.slack_bot_token_secret>
+                      SLACK_CHANNEL_ID: <+pipeline.variables.slack_channel_id>
+                      SLACK_THREAD_TS: <+pipeline.variables.slack_thread_ts>
+                      SUMMARY_B64: <+execution.steps.export_summary.output.outputVariables.SUMMARY_B64>
+                      TITLE: <+pipeline.variables.team_name>
+                      PIPELINE_EXECUTION_URL: <+pipeline.executionUrl>
+                    command: |-
+                      set -euo pipefail
+                      python3 - <<'PY'
+                      import base64, json, os, re, urllib.request
+
+                      SLACK_TS_RE = re.compile(r"^\d+\.\d+$")
+                      SLACK_P_RE = re.compile(r"(?:^|/)p(\d{10,})(?:\b|[/?#]|$)")
+                      SLACK_CHANNEL_RE = re.compile(r"/archives/([CGD][A-Z0-9]+)/", re.I)
+
+
+                      def normalize_slack_ts(raw):
+                          value = (raw or "").strip().strip('"').strip("'")
+                          unresolved_prefix = chr(60) + chr(43)
+                          if not value or value == "null" or value.startswith(unresolved_prefix):
+                              return ""
+                          if SLACK_TS_RE.match(value):
+                              return value
+                          match = SLACK_P_RE.search(value)
+                          digits = match.group(1) if match else ""
+                          if not digits or len(digits) <= 6:
+                              return ""
+                          return digits[:-6] + "." + digits[-6:]
+
+
+                      token = (os.environ.get("SLACK_BOT_TOKEN") or "").strip()
+                      if not token:
+                          raise RuntimeError("slack_bot_token_secret is required to post")
+                      thread_raw = os.environ.get("SLACK_THREAD_TS", "").strip()
+                      channel_match = SLACK_CHANNEL_RE.search(thread_raw)
+                      channel_id = (channel_match.group(1).upper() if channel_match else os.environ.get("SLACK_CHANNEL_ID", "").strip())
+                      if not channel_id:
+                          raise RuntimeError("Set slack_channel_id or pass a Slack permalink")
+                      summary_b64 = os.environ.get("SUMMARY_B64", "").strip()
+                      if not summary_b64:
+                          raise RuntimeError("Missing summary")
+                      summary = base64.b64decode(summary_b64 + "=" * (-len(summary_b64) % 4)).decode()
+                      team = os.environ.get("TITLE", "agent").strip()
+                      exec_url = os.environ.get("PIPELINE_EXECUTION_URL", "").strip()
+                      footer = f"\n_<{exec_url}|pipeline execution>_" if exec_url.startswith("http") else ""
+                      thread_ts = normalize_slack_ts(thread_raw)
+                      body = {
+                          "channel": channel_id,
+                          "text": (f"*[{team}]*\n" + summary + footer)[:39000],
+                          "unfurl_links": False,
+                          "unfurl_media": False,
+                      }
+                      if thread_ts:
+                          body["thread_ts"] = thread_ts
+                      req = urllib.request.Request(
+                          "https://slack.com/api/chat.postMessage",
+                          data=json.dumps(body).encode(),
+                          headers={"Authorization": "Bearer " + token, "Content-Type": "application/json; charset=utf-8"},
+                          method="POST",
+                      )
+                      with urllib.request.urlopen(req, timeout=20) as resp:
+                          data = json.loads(resp.read())
+                      if not data.get("ok"):
+                          raise RuntimeError("chat.postMessage: " + str(data.get("error")))
+                      print("Posted Slack ts=" + str(data.get("ts")))
+                      PY
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure

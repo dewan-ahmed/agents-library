@@ -1,0 +1,90 @@
+{
+  "scope": "custom",
+  "exclude": "marketplace",
+  "combos": [
+    {
+      "agentId": "ca_dockerfilecacheoptimizernomcp",
+      "pipelineId": "dockerfile-cache-optimizer",
+      "pipelineIdentifier": "dockerfileCacheOptimizer",
+      "agentFile": "catalog/agents/ca_dockerfilecacheoptimizernomcp.yaml",
+      "pipelineFile": "catalog/pipelines/dockerfile-cache-optimizer.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_documentation_generator",
+      "pipelineId": "docs-generator",
+      "pipelineIdentifier": "documentationGenerator",
+      "agentFile": "catalog/agents/ca_documentation_generator.yaml",
+      "pipelineFile": "catalog/pipelines/docs-generator.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_testresultssummarizer",
+      "pipelineId": "test-results-summarizer",
+      "pipelineIdentifier": "testResultsSummarizer",
+      "agentFile": "catalog/agents/ca_testresultssummarizer.yaml",
+      "pipelineFile": "catalog/pipelines/test-results-summarizer.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_test_and_security_verification",
+      "pipelineId": "unit-test-verification",
+      "pipelineIdentifier": "unitTestVerification",
+      "agentFile": "catalog/agents/ca_test_and_security_verification.yaml",
+      "pipelineFile": "catalog/pipelines/unit-test-verification.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_docker_image_tag_inspector",
+      "pipelineId": "docker-image-tag-inspector",
+      "pipelineIdentifier": "dockerImageTagInspector",
+      "agentFile": "catalog/agents/ca_docker_image_tag_inspector.yaml",
+      "pipelineFile": "catalog/pipelines/docker-image-tag-inspector.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_docker_tag_governance",
+      "pipelineId": "docker-tag-governance",
+      "pipelineIdentifier": "dockerTagGovernance",
+      "agentFile": "catalog/agents/ca_docker_tag_governance.yaml",
+      "pipelineFile": "catalog/pipelines/docker-tag-governance.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_pipeline_failure_rca",
+      "pipelineId": "pipeline-failure-rca",
+      "pipelineIdentifier": "pipelineFailureRca",
+      "agentFile": "catalog/agents/ca_pipeline_failure_rca.yaml",
+      "pipelineFile": "catalog/pipelines/pipeline-failure-rca.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_change_advisory",
+      "pipelineId": "change-advisory",
+      "pipelineIdentifier": "changeAdvisory",
+      "agentFile": "catalog/agents/ca_change_advisory.yaml",
+      "pipelineFile": "catalog/pipelines/change-advisory.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_security_finding_triage",
+      "pipelineId": "security-finding-triage",
+      "pipelineIdentifier": "securityFindingTriage",
+      "agentFile": "catalog/agents/ca_security_finding_triage.yaml",
+      "pipelineFile": "catalog/pipelines/security-finding-triage.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_runbook_drift",
+      "pipelineId": "runbook-drift",
+      "pipelineIdentifier": "runbookDrift",
+      "agentFile": "catalog/agents/ca_runbook_drift.yaml",
+      "pipelineFile": "catalog/pipelines/runbook-drift.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_incident_comms",
+      "pipelineId": "incident-comms",
+      "pipelineIdentifier": "incidentComms",
+      "agentFile": "catalog/agents/ca_incident_comms.yaml",
+      "pipelineFile": "catalog/pipelines/incident-comms.pipeline.yaml"
+    },
+    {
+      "agentId": "ca_container_vuln_remediation",
+      "pipelineId": "container-vuln-remediation",
+      "pipelineIdentifier": "containerVulnRemediation",
+      "agentFile": "catalog/agents/ca_container_vuln_remediation.yaml",
+      "pipelineFile": "catalog/pipelines/container-vuln-remediation.pipeline.yaml"
+    }
+  ]
+}

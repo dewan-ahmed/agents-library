@@ -1,3 +1,5 @@
 web/node_modules
 web/dist
 .DS_Store
+community-recategorization-gdoc-plan.md
+/package-lock.json

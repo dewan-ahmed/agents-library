@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ownershipLabel, yamlForPipeline, type Agent, type Pipeline } from "../catalog";
+import { ownershipLabel, useCasesOf, yamlForPipeline, type Agent, type Pipeline } from "../catalog";
 import { CopyButton } from "./YamlBlock";
 import { ConfigSummary } from "./ConfigChecklist";
 import { applyYamlScope, emptyScope, type HarnessScope } from "../scope";
@@ -9,6 +9,7 @@ export function AgentCard({ agent }: { agent: Agent }) {
     <article className="card">
       <div className="card-meta">
         <span className="kicker">{ownershipLabel(agent.ownership)}</span>
+        {useCasesOf(agent).includes("enterprise") && <span className="pill">Enterprise</span>}
         {agent.availability === "coming_soon" && <span className="pill">Coming soon</span>}
       </div>
       <h3>
@@ -35,6 +36,7 @@ export function PipelineCard({
     <article className="card">
       <div className="card-meta">
         <span className="kicker">{pipeline.complexity}</span>
+        {useCasesOf(pipeline).includes("enterprise") && <span className="pill">Enterprise</span>}
         {pipeline.availability === "coming_soon" && <span className="pill">Coming soon</span>}
       </div>
       <h3>

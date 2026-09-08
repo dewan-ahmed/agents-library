@@ -8,12 +8,22 @@
       "description": "Forked from the Harness dockerfileCacheOptimizer template with MCP connectors optional. The agent only edits Dockerfiles and .dockerignore. Git, branch, and PR work happen in the pipeline Run step. No MCP is required for the happy path.",
       "ownership": "custom",
       "linkType": "custom",
-      "lifecycle": ["build"],
-      "modules": ["ci"],
-      "triggers": ["pipeline", "pull_request"],
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
       "scope": "project",
       "version": "1.0.0",
-      "inputs": ["llmConnector", "modelName"],
+      "inputs": [
+        "llmConnector",
+        "modelName"
+      ],
       "configuration": [
         {
           "key": "llmConnector",
@@ -48,7 +58,10 @@
           "note": "The pipeline clones the repo and pushes the fix branch. The agent itself never runs git."
         }
       ],
-      "prerequisites": ["LLM connector", "Git connector with write access to the repo"],
+      "prerequisites": [
+        "LLM connector",
+        "Git connector with write access to the repo"
+      ],
       "keywords": [
         "dockerfile",
         "docker",
@@ -69,12 +82,24 @@
       "description": "A technical documentation agent. It discovers structure with Glob, reads entry points, greps public interfaces, and writes generated files marked so later runs can overwrite them without touching hand-written docs.",
       "ownership": "custom",
       "linkType": "custom",
-      "lifecycle": ["plan", "build"],
-      "modules": ["ci", "idp"],
-      "triggers": ["pipeline", "pull_request"],
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "idp"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
       "scope": "project",
       "version": "1.0.0",
-      "inputs": ["llmConnector", "modelName"],
+      "inputs": [
+        "llmConnector",
+        "modelName"
+      ],
       "configuration": [
         {
           "key": "llmConnector",
@@ -109,7 +134,10 @@
           "note": "Only needed if you commit the generated docs/ back to the repo."
         }
       ],
-      "prerequisites": ["LLM connector", "Git connector with write access if you commit docs"],
+      "prerequisites": [
+        "LLM connector",
+        "Git connector with write access if you commit docs"
+      ],
       "keywords": [
         "docs",
         "documentation",
@@ -128,9 +156,17 @@
       "description": "Runs after a test step. Reads the test output file, reports totals and failures, and can post or update a PR comment. Designed around go test output but useful anywhere the log is parseable.",
       "ownership": "custom",
       "linkType": "custom",
-      "lifecycle": ["test"],
-      "modules": ["ci"],
-      "triggers": ["failed_pipeline", "pull_request", "pipeline"],
+      "lifecycle": [
+        "test"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "failed_pipeline",
+        "pull_request",
+        "pipeline"
+      ],
       "scope": "project",
       "version": "1.0.0",
       "inputs": [
@@ -186,7 +222,11 @@
           "note": "Paired with the SCM MCP connector for PR comments. Replace YOUR_SCM_TOKEN_SECRET with your secret id."
         }
       ],
-      "prerequisites": ["LLM connector", "Test output file from a prior Run step", "Optional SCM MCP for PR comments"],
+      "prerequisites": [
+        "LLM connector",
+        "Test output file from a prior Run step",
+        "Optional SCM MCP for PR comments"
+      ],
       "keywords": [
         "test",
         "failure",
@@ -205,12 +245,26 @@
       "description": "Analyzes a cloned repository to calculate the percentage of independently testable services and components with meaningful unit tests. It reports its evidence and can use Harness MCP to interrupt the current execution when coverage is below the configured threshold.",
       "ownership": "custom",
       "linkType": "custom",
-      "lifecycle": ["test", "secure"],
-      "modules": ["ci"],
-      "triggers": ["pipeline", "pull_request"],
+      "lifecycle": [
+        "test",
+        "secure"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
       "scope": "project",
       "version": "1.0.0",
-      "inputs": ["llmConnector", "modelName", "mcpConnectors", "coverageThreshold", "pipelineExecutionId"],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "mcpConnectors",
+        "coverageThreshold",
+        "pipelineExecutionId"
+      ],
       "configuration": [
         {
           "key": "llmConnector",
@@ -253,8 +307,21 @@
           "note": "The percentage of testable services/components that must have meaningful unit tests; defaults to 90."
         }
       ],
-      "prerequisites": ["LLM connector", "Harness MCP connector with permission to interrupt pipeline executions", "CI codebase repository"],
-      "keywords": ["unit test", "verification", "coverage", "quality gate", "abort pipeline", "component", "service", "ci"]
+      "prerequisites": [
+        "LLM connector",
+        "Harness MCP connector with permission to interrupt pipeline executions",
+        "CI codebase repository"
+      ],
+      "keywords": [
+        "unit test",
+        "verification",
+        "coverage",
+        "quality gate",
+        "abort pipeline",
+        "component",
+        "service",
+        "ci"
+      ]
     },
     {
       "id": "ca_docker_image_tag_inspector",
@@ -264,12 +331,26 @@
       "description": "Queries and paginates the public Docker Hub tags API, calculates exact tag ages, groups stale tags, and reports conservative cleanup and storage recommendations without deleting anything.",
       "ownership": "custom",
       "linkType": "custom",
-      "lifecycle": ["secure"],
-      "modules": ["ci", "ccm"],
-      "triggers": ["pipeline", "scheduled"],
+      "lifecycle": [
+        "secure"
+      ],
+      "modules": [
+        "ci",
+        "ccm"
+      ],
+      "triggers": [
+        "pipeline",
+        "scheduled"
+      ],
       "scope": "project",
       "version": "1.0.0",
-      "inputs": ["llmConnector", "modelName", "allowedDomains", "dockerRepository", "daysThreshold"],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "allowedDomains",
+        "dockerRepository",
+        "daysThreshold"
+      ],
       "configuration": [
         {
           "key": "llmConnector",
@@ -312,8 +393,22 @@
           "note": "The inspector uses Docker Hub's public API. Passing a connector identifier alone does not authenticate curl requests."
         }
       ],
-      "prerequisites": ["LLM connector", "Public Docker Hub repository", "Network access to hub.docker.com"],
-      "keywords": ["docker", "docker hub", "image", "tag", "registry", "retention", "cleanup", "stale", "cost"]
+      "prerequisites": [
+        "LLM connector",
+        "Public Docker Hub repository",
+        "Network access to hub.docker.com"
+      ],
+      "keywords": [
+        "docker",
+        "docker hub",
+        "image",
+        "tag",
+        "registry",
+        "retention",
+        "cleanup",
+        "stale",
+        "cost"
+      ]
     },
     {
       "id": "ca_docker_tag_governance",
@@ -323,12 +418,33 @@
       "description": "Audits one or more Docker Hub repositories using protected patterns, retain-count, and age rules. It is report-only by default and requires a Docker Hub username and token secret before performing deletions.",
       "ownership": "custom",
       "linkType": "custom",
-      "lifecycle": ["secure"],
-      "modules": ["ci", "ccm"],
-      "triggers": ["pipeline", "scheduled", "approval"],
+      "lifecycle": [
+        "secure"
+      ],
+      "modules": [
+        "ci",
+        "ccm"
+      ],
+      "triggers": [
+        "pipeline",
+        "scheduled",
+        "approval"
+      ],
       "scope": "project",
       "version": "1.0.0",
-      "inputs": ["llmConnector", "modelName", "allowedDomains", "dockerRepositories", "dockerUsername", "dockerHubToken", "cleanupMode", "retainCount", "protectedPatterns", "daysThreshold", "estimatedCostPerGB"],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "allowedDomains",
+        "dockerRepositories",
+        "dockerUsername",
+        "dockerHubToken",
+        "cleanupMode",
+        "retainCount",
+        "protectedPatterns",
+        "daysThreshold",
+        "estimatedCostPerGB"
+      ],
       "configuration": [
         {
           "key": "llmConnector",
@@ -387,8 +503,683 @@
           "note": "A connector identifier does not make credentials available to curl. Cleanup uses the explicit secret input instead."
         }
       ],
-      "prerequisites": ["LLM connector", "Network access to hub.docker.com", "Docker Hub username and token secret for cleanup modes", "Approval group for approval-gated deletion"],
-      "keywords": ["docker", "docker hub", "tag", "governance", "retention", "cleanup", "delete", "approval", "registry", "storage", "cost"]
+      "prerequisites": [
+        "LLM connector",
+        "Network access to hub.docker.com",
+        "Docker Hub username and token secret for cleanup modes",
+        "Approval group for approval-gated deletion"
+      ],
+      "keywords": [
+        "docker",
+        "docker hub",
+        "tag",
+        "governance",
+        "retention",
+        "cleanup",
+        "delete",
+        "approval",
+        "registry",
+        "storage",
+        "cost"
+      ]
+    },
+    {
+      "ownership": "custom",
+      "linkType": "custom",
+      "scope": "project",
+      "version": "1.1.0",
+      "id": "ca_pipeline_failure_rca",
+      "harnessAgentId": "ca_pipeline_failure_rca",
+      "name": "Pipeline Failure RCA",
+      "summary": "Diagnoses one failed Harness execution from its failed step, logs, commit or PR, and optional Confluence runbook, then opens a fix PR only when explicitly enabled.",
+      "description": "A Harness-first RCA agent for CI and CD failures. It uses harness-mcp-v2 to inspect the pinned execution, first failed step, logs, repository diff, and relevant files. An optional Atlassian MCP connector adds a bounded Confluence runbook lookup. It never retries or interrupts a pipeline and can open at most one low-risk fix PR behind an explicit flag.",
+      "lifecycle": [
+        "build",
+        "release"
+      ],
+      "modules": [
+        "ci",
+        "cd",
+        "platform"
+      ],
+      "triggers": [
+        "failed_pipeline",
+        "pipeline"
+      ],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "mcpConnectors",
+        "agent_request_b64",
+        "team_name",
+        "services",
+        "confluence_space",
+        "open_fix_pr"
+      ],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Harness AI model connector. Use account.harnessAnthropic or your project OpenAI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model exposed by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcpConnectors",
+          "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
+        },
+        {
+          "key": "harness_api_key",
+          "label": "Harness PAT",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_api_key",
+          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
+        },
+        {
+          "key": "request_json",
+          "label": "Request payload",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "A JSON object identifying the exact Harness resource or incident facts. Examples are in docs/customer-agent-usage.md."
+        },
+        {
+          "key": "services",
+          "label": "Owned repositories and pipelines",
+          "kind": "input",
+          "requirement": "required",
+          "field": "agentSettings.services",
+          "note": "Constrains which Harness resources and repositories the agent may inspect or modify."
+        },
+        {
+          "key": "open_fix_pr",
+          "label": "Open fix PR",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.open_fix_pr",
+          "note": "Defaults to false. When true, still limited to one clearly justified low-risk pull request."
+        }
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT with execution, pipeline, log, and repository read access",
+        "Optional Atlassian MCP connector for Confluence runbooks",
+        "Pull-request permission only when open_fix_pr is true"
+      ],
+      "keywords": [
+        "harness",
+        "pipeline",
+        "failure",
+        "rca",
+        "ci",
+        "cd",
+        "logs",
+        "commit",
+        "pull request",
+        "confluence",
+        "runbook",
+        "enterprise"
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "ownership": "custom",
+      "linkType": "custom",
+      "scope": "project",
+      "version": "1.1.0",
+      "id": "ca_change_advisory",
+      "harnessAgentId": "ca_change_advisory",
+      "name": "Change Advisory Go No-Go",
+      "summary": "Builds a go, hold, or rollback-watch recommendation from the Harness execution and diff, recent pipeline reliability, security findings, and optional Confluence CAB evidence.",
+      "description": "A read-only Harness release-governance agent. It inspects the actual execution or artifact, repository diff, recent executions, and available STO/SCS findings. An optional Atlassian MCP connector adds the CAB checklist and unresolved Jira risks. It holds when evidence is incomplete and cannot approve, run, interrupt, merge, or create issues.",
+      "lifecycle": [
+        "release",
+        "govern"
+      ],
+      "modules": [
+        "cd",
+        "ci",
+        "sto",
+        "platform"
+      ],
+      "triggers": [
+        "pipeline",
+        "approval"
+      ],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "mcpConnectors",
+        "agent_request_b64",
+        "team_name",
+        "confluence_space",
+        "jira_project"
+      ],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Harness AI model connector. Use account.harnessAnthropic or your project OpenAI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model exposed by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcpConnectors",
+          "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
+        },
+        {
+          "key": "harness_api_key",
+          "label": "Harness PAT",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_api_key",
+          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
+        },
+        {
+          "key": "request_json",
+          "label": "Request payload",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "A JSON object identifying the exact Harness resource or incident facts. Examples are in docs/customer-agent-usage.md."
+        },
+        {
+          "key": "confluence_space",
+          "label": "CAB Confluence space",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "agentSettings.confluence_space",
+          "note": "Bounds the CAB checklist search. Leave empty for a Harness-only decision."
+        },
+        {
+          "key": "jira_project",
+          "label": "Jira project",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "agentSettings.jira_project",
+          "note": "Bounds unresolved-risk search. Leave empty when Jira is unavailable."
+        }
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT with execution, repository, pipeline, STO, and SCS read access",
+        "Optional Atlassian MCP connector for Confluence and Jira"
+      ],
+      "keywords": [
+        "change advisory",
+        "cab",
+        "go no-go",
+        "harness",
+        "release",
+        "deployment",
+        "security",
+        "confluence",
+        "jira",
+        "governance",
+        "enterprise"
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "ownership": "custom",
+      "linkType": "custom",
+      "scope": "project",
+      "version": "1.1.0",
+      "id": "ca_security_finding_triage",
+      "harnessAgentId": "ca_security_finding_triage",
+      "name": "Security Finding Triage",
+      "summary": "Confirms one Harness STO or SCS finding against the cited source file and optionally creates one Jira issue or low-risk fix PR behind explicit flags.",
+      "description": "A Harness-first security triage agent. It fetches the pinned finding, verifies that the cited code still exists at the scan ref, and classifies exploitability from evidence. Optional Atlassian MCP adds duplicate Jira search and flag-gated issue creation. Pull-request creation is separately flag-gated and limited to one obvious low-risk patch.",
+      "lifecycle": [
+        "secure"
+      ],
+      "modules": [
+        "sto",
+        "ci",
+        "platform"
+      ],
+      "triggers": [
+        "scan_finding",
+        "pipeline"
+      ],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "mcpConnectors",
+        "agent_request_b64",
+        "team_name",
+        "services",
+        "jira_project",
+        "create_ticket",
+        "open_fix_pr"
+      ],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Harness AI model connector. Use account.harnessAnthropic or your project OpenAI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model exposed by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcpConnectors",
+          "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
+        },
+        {
+          "key": "harness_api_key",
+          "label": "Harness PAT",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_api_key",
+          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
+        },
+        {
+          "key": "request_json",
+          "label": "Request payload",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "A JSON object identifying the exact Harness resource or incident facts. Examples are in docs/customer-agent-usage.md."
+        },
+        {
+          "key": "create_ticket",
+          "label": "Create Jira ticket",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.create_ticket",
+          "note": "Defaults to false. Creates at most one issue when Jira is configured and no duplicate exists."
+        },
+        {
+          "key": "open_fix_pr",
+          "label": "Open fix PR",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.open_fix_pr",
+          "note": "Defaults to false and remains restricted to one-file low-risk fixes."
+        }
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT with STO/SCS finding and repository read access",
+        "Optional Atlassian MCP connector for Jira",
+        "Pull-request permission only when open_fix_pr is true"
+      ],
+      "keywords": [
+        "harness",
+        "sto",
+        "scs",
+        "security",
+        "finding",
+        "vulnerability",
+        "triage",
+        "jira",
+        "fix pr",
+        "enterprise"
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "ownership": "custom",
+      "linkType": "custom",
+      "scope": "project",
+      "version": "1.1.0",
+      "id": "ca_runbook_drift",
+      "harnessAgentId": "ca_runbook_drift",
+      "name": "Runbook Drift Detector",
+      "summary": "Compares Confluence runbook claims against real Harness pipelines, stages, steps, repositories, owners, and file paths, with an optional docs PR.",
+      "description": "A documentation-versus-Harness drift detector. It reads a bounded set of Confluence runbooks through Atlassian MCP, extracts pipeline and repository claims, and validates each against Harness. It reports missing resources, undocumented live behavior, stale details, and broken paths. It never edits Confluence or pipelines and can open only one docs PR when enabled.",
+      "lifecycle": [
+        "govern",
+        "plan"
+      ],
+      "modules": [
+        "ci",
+        "cd",
+        "platform"
+      ],
+      "triggers": [
+        "scheduled",
+        "pipeline"
+      ],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "mcpConnectors",
+        "agent_request_b64",
+        "team_name",
+        "confluence_space",
+        "pipeline_ids",
+        "open_docs_pr",
+        "docs_repo_id"
+      ],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Harness AI model connector. Use account.harnessAnthropic or your project OpenAI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model exposed by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcpConnectors",
+          "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
+        },
+        {
+          "key": "harness_api_key",
+          "label": "Harness PAT",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_api_key",
+          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
+        },
+        {
+          "key": "request_json",
+          "label": "Request payload",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "A JSON object identifying the exact Harness resource or incident facts. Examples are in docs/customer-agent-usage.md."
+        },
+        {
+          "key": "pipeline_ids",
+          "label": "Harness pipeline ids",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.pipeline_ids",
+          "note": "Comma-separated ids to compare against the runbooks."
+        },
+        {
+          "key": "open_docs_pr",
+          "label": "Open docs PR",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.open_docs_pr",
+          "note": "Defaults to false. When enabled, docs_repo_id must identify a team-owned Harness Code repo."
+        }
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT with pipeline and repository read access",
+        "Atlassian MCP connector with Confluence read access",
+        "Docs repository only when open_docs_pr is true"
+      ],
+      "keywords": [
+        "harness",
+        "confluence",
+        "runbook",
+        "drift",
+        "documentation",
+        "pipeline",
+        "repository",
+        "governance",
+        "enterprise"
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "ownership": "custom",
+      "linkType": "custom",
+      "scope": "project",
+      "version": "1.1.0",
+      "id": "ca_incident_comms",
+      "harnessAgentId": "ca_incident_comms",
+      "name": "Incident Customer Comms Drafter",
+      "summary": "Drafts internal and customer-safe updates from a supplied incident payload, optional Harness execution context, and optional Confluence status template.",
+      "description": "A PagerDuty-free incident communications agent. The request JSON is the source of truth for incident facts and may reference a Harness execution for deployment context. An optional Atlassian MCP connector supplies the approved Confluence template. It drafts but never publishes, pages, or mutates Harness; the pipeline optionally posts the reviewed output to Slack.",
+      "lifecycle": [
+        "monitor",
+        "release"
+      ],
+      "modules": [
+        "ci",
+        "cd",
+        "platform"
+      ],
+      "triggers": [
+        "failed_pipeline",
+        "pipeline"
+      ],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "mcpConnectors",
+        "agent_request_b64",
+        "team_name",
+        "status_template",
+        "severity"
+      ],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Harness AI model connector. Use account.harnessAnthropic or your project OpenAI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "A model exposed by the selected LLM connector."
+        },
+        {
+          "key": "mcpConnectors",
+          "label": "Atlassian MCP connector",
+          "kind": "connector",
+          "requirement": "optional",
+          "field": "agentSettings.mcpConnectors",
+          "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
+        },
+        {
+          "key": "harness_api_key",
+          "label": "Harness PAT",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "agentSettings.harness_api_key",
+          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
+        },
+        {
+          "key": "request_json",
+          "label": "Request payload",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "A JSON object identifying the exact Harness resource or incident facts. Examples are in docs/customer-agent-usage.md."
+        },
+        {
+          "key": "status_template",
+          "label": "Confluence status template",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "agentSettings.status_template",
+          "note": "Page id or title. Leave empty to use the built-in two-block output shape."
+        },
+        {
+          "key": "slack_bot_token_secret",
+          "label": "Slack bot token",
+          "kind": "secret",
+          "requirement": "optional",
+          "field": "pipeline.variables.slack_bot_token_secret",
+          "note": "Required only when posting. Needs chat:write; set a channel id or thread permalink too."
+        }
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT with execution read access",
+        "Optional Atlassian MCP connector for the Confluence status template",
+        "Optional Slack bot token for posting"
+      ],
+      "keywords": [
+        "incident",
+        "comms",
+        "customer update",
+        "harness",
+        "pipeline",
+        "deployment",
+        "confluence",
+        "slack",
+        "draft",
+        "enterprise"
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "ownership": "custom",
+      "linkType": "custom",
+      "scope": "project",
+      "version": "1.0.0",
+      "id": "ca_container_vuln_remediation",
+      "harnessAgentId": "ca_container_vuln_remediation",
+      "name": "Container Vulnerability Remediation",
+      "summary": "Applies a single-pass Dockerfile and ignore-file fix for CRITICAL/HIGH container CVEs, using STO issue details and optional previous-attempt context.",
+      "description": "A customer-run remediator for container image findings. It classifies each CVE as fixable, unfixable OS, or unfixable application, then prefers a safer base image, falls back to in-place package upgrades, and records truly unfixable IDs in .trivyignore. It edits files on disk only. The sample pipeline rebuilds, rescans, and can open a pull request.",
+      "lifecycle": [
+        "secure",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "scan_finding"
+      ],
+      "useCases": [
+        "enterprise"
+      ],
+      "inputs": [
+        "llmConnector",
+        "modelName",
+        "remediationDetails",
+        "previousAttempts",
+        "remediationReport"
+      ],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "agentSettings.llmConnector",
+          "note": "Replace account.YOUR_LLM_CONNECTOR with an accessible account, org, or project AI connector."
+        },
+        {
+          "key": "modelName",
+          "label": "Model id",
+          "kind": "value",
+          "requirement": "required",
+          "field": "agentSettings.modelName",
+          "note": "Replace YOUR_MODEL_ID with a model the selected LLM connector can serve."
+        },
+        {
+          "key": "remediationDetails",
+          "label": "Remediation details",
+          "kind": "input",
+          "requirement": "required",
+          "field": "agentSettings.remediationDetails",
+          "note": "Summary of CRITICAL/HIGH issues, usually produced by the pipeline STO fetch step."
+        },
+        {
+          "key": "previousAttempts",
+          "label": "Previous attempts",
+          "kind": "input",
+          "requirement": "optional",
+          "field": "agentSettings.previousAttempts",
+          "note": "Round-2 context so the agent does not repeat a failed strategy."
+        },
+        {
+          "key": "remediationReport",
+          "label": "Structured issue report path",
+          "kind": "input",
+          "requirement": "optional",
+          "field": "agentSettings.remediationReport",
+          "note": "Workspace path to a JSON array of CVE records written by the pipeline."
+        }
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Dockerfile in the cloned repository",
+        "STO scan results or equivalent CVE details"
+      ],
+      "keywords": [
+        "container",
+        "vulnerability",
+        "cve",
+        "dockerfile",
+        "trivy",
+        "sto",
+        "remediation",
+        "base image",
+        "alpine",
+        "enterprise"
+      ]
     }
   ],
   "pipelines": [
@@ -397,12 +1188,27 @@
       "name": "Dockerfile Cache Optimizer",
       "identifier": "dockerfileCacheOptimizer",
       "summary": "Clone a repo, run the Dockerfile cache agent, then commit Dockerfile and .dockerignore changes and push a branch.",
-      "runtimeInputs": ["repoName", "llmConnector", "modelName", "gitUserEmail", "gitUserName"],
-      "lifecycle": ["build"],
-      "modules": ["ci"],
-      "triggers": ["pipeline", "pull_request"],
+      "runtimeInputs": [
+        "repoName",
+        "llmConnector",
+        "modelName",
+        "gitUserEmail",
+        "gitUserName"
+      ],
+      "lifecycle": [
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
       "complexity": "intermediate",
-      "agentIds": ["ca_dockerfilecacheoptimizernomcp"],
+      "agentIds": [
+        "ca_dockerfilecacheoptimizernomcp"
+      ],
       "yamlFile": "dockerfile-cache-optimizer.pipeline.yaml",
       "stages": [
         "Clone codebase",
@@ -415,12 +1221,28 @@
       "name": "Documentation Generator",
       "identifier": "documentationGenerator",
       "summary": "Clone a repo, generate docs/ with the documentation agent, then commit and push a docs branch.",
-      "runtimeInputs": ["repoName", "llmConnector", "modelName", "gitUserEmail", "gitUserName"],
-      "lifecycle": ["plan", "build"],
-      "modules": ["ci"],
-      "triggers": ["pipeline", "pull_request"],
+      "runtimeInputs": [
+        "repoName",
+        "llmConnector",
+        "modelName",
+        "gitUserEmail",
+        "gitUserName"
+      ],
+      "lifecycle": [
+        "plan",
+        "build"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
       "complexity": "beginner",
-      "agentIds": ["ca_documentation_generator"],
+      "agentIds": [
+        "ca_documentation_generator"
+      ],
       "yamlFile": "docs-generator.pipeline.yaml",
       "stages": [
         "Clone codebase",
@@ -433,29 +1255,73 @@
       "name": "Test Results Summarizer",
       "identifier": "testResultsSummarizer",
       "summary": "Run your test command, ignore a failing test step, then summarize results with the test summarizer agent.",
-      "runtimeInputs": ["repoName", "llmConnector", "modelName", "testCommand"],
-      "lifecycle": ["test"],
-      "modules": ["ci"],
-      "triggers": ["failed_pipeline", "pull_request", "pipeline"],
+      "runtimeInputs": [
+        "repoName",
+        "llmConnector",
+        "modelName",
+        "testCommand"
+      ],
+      "lifecycle": [
+        "test"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "failed_pipeline",
+        "pull_request",
+        "pipeline"
+      ],
       "complexity": "intermediate",
-      "agentIds": ["ca_testresultssummarizer"],
+      "agentIds": [
+        "ca_testresultssummarizer"
+      ],
       "yamlFile": "test-results-summarizer.pipeline.yaml",
-      "stages": ["Clone codebase", "Run Tests", "Test Result Summarize"]
+      "stages": [
+        "Clone codebase",
+        "Run Tests",
+        "Test Result Summarize"
+      ]
     },
     {
       "id": "unit-test-verification",
       "name": "Unit Test Verification",
       "identifier": "unitTestVerification",
       "summary": "Clone a repository, map services and components to meaningful unit tests, and interrupt the current execution through Harness MCP when structural coverage is below the threshold.",
-      "runtimeInputs": ["repoName", "build", "llmConnector", "modelName", "harnessMcpConnector", "coverageThreshold"],
-      "lifecycle": ["test", "secure"],
-      "modules": ["ci"],
-      "triggers": ["pipeline", "pull_request"],
+      "runtimeInputs": [
+        "repoName",
+        "build",
+        "llmConnector",
+        "modelName",
+        "harnessMcpConnector",
+        "coverageThreshold"
+      ],
+      "lifecycle": [
+        "test",
+        "secure"
+      ],
+      "modules": [
+        "ci"
+      ],
+      "triggers": [
+        "pipeline",
+        "pull_request"
+      ],
       "complexity": "intermediate",
-      "agentIds": ["ca_test_and_security_verification"],
+      "agentIds": [
+        "ca_test_and_security_verification"
+      ],
       "yamlFile": "unit-test-verification.pipeline.yaml",
-      "stages": ["Clone codebase", "Verify Unit Test Coverage", "Continue After Verification"],
-      "prerequisites": ["CI codebase repository", "LLM connector", "Harness MCP connector with pipeline execution interrupt permission"],
+      "stages": [
+        "Clone codebase",
+        "Verify Unit Test Coverage",
+        "Continue After Verification"
+      ],
+      "prerequisites": [
+        "CI codebase repository",
+        "LLM connector",
+        "Harness MCP connector with pipeline execution interrupt permission"
+      ],
       "configuration": [
         {
           "key": "repoName",
@@ -504,15 +1370,36 @@
       "name": "Docker Image Tag Inspector",
       "identifier": "dockerImageTagInspector",
       "summary": "Inspect all tags in a public Docker Hub repository and report tags older than a configurable age without modifying the registry.",
-      "runtimeInputs": ["llmConnector", "modelName", "dockerRepository", "daysThreshold"],
-      "lifecycle": ["secure"],
-      "modules": ["ci", "ccm"],
-      "triggers": ["pipeline", "scheduled"],
+      "runtimeInputs": [
+        "llmConnector",
+        "modelName",
+        "dockerRepository",
+        "daysThreshold"
+      ],
+      "lifecycle": [
+        "secure"
+      ],
+      "modules": [
+        "ci",
+        "ccm"
+      ],
+      "triggers": [
+        "pipeline",
+        "scheduled"
+      ],
       "complexity": "beginner",
-      "agentIds": ["ca_docker_image_tag_inspector"],
+      "agentIds": [
+        "ca_docker_image_tag_inspector"
+      ],
       "yamlFile": "docker-image-tag-inspector.pipeline.yaml",
-      "stages": ["Inspect Docker Tags"],
-      "prerequisites": ["LLM connector", "Public Docker Hub repository", "Network access to hub.docker.com"],
+      "stages": [
+        "Inspect Docker Tags"
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Public Docker Hub repository",
+        "Network access to hub.docker.com"
+      ],
       "configuration": [
         {
           "key": "llmConnector",
@@ -553,15 +1440,46 @@
       "name": "Docker Tag Governance",
       "identifier": "dockerTagGovernance",
       "summary": "Analyze Docker Hub tag retention, optionally collect approval, and run guarded cleanup with explicit Docker Hub credentials.",
-      "runtimeInputs": ["llmConnector", "modelName", "dockerRepositories", "cleanupMode", "retainCount", "protectedPatterns", "daysThreshold", "estimatedCostPerGB", "dockerUsername", "dockerHubToken"],
-      "lifecycle": ["secure"],
-      "modules": ["ci", "ccm"],
-      "triggers": ["pipeline", "scheduled", "approval"],
+      "runtimeInputs": [
+        "llmConnector",
+        "modelName",
+        "dockerRepositories",
+        "cleanupMode",
+        "retainCount",
+        "protectedPatterns",
+        "daysThreshold",
+        "estimatedCostPerGB",
+        "dockerUsername",
+        "dockerHubToken"
+      ],
+      "lifecycle": [
+        "secure"
+      ],
+      "modules": [
+        "ci",
+        "ccm"
+      ],
+      "triggers": [
+        "pipeline",
+        "scheduled",
+        "approval"
+      ],
       "complexity": "advanced",
-      "agentIds": ["ca_docker_tag_governance"],
+      "agentIds": [
+        "ca_docker_tag_governance"
+      ],
       "yamlFile": "docker-tag-governance.pipeline.yaml",
-      "stages": ["Tag Analysis", "Approval Gate", "Execute Cleanup"],
-      "prerequisites": ["LLM connector", "Network access to hub.docker.com", "Docker Hub username and Harness token secret for cleanup", "At least one authorized approval user"],
+      "stages": [
+        "Tag Analysis",
+        "Approval Gate",
+        "Execute Cleanup"
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Network access to hub.docker.com",
+        "Docker Hub username and Harness token secret for cleanup",
+        "At least one authorized approval user"
+      ],
       "configuration": [
         {
           "key": "llmConnector",
@@ -618,6 +1536,499 @@
           "requirement": "optional",
           "field": "approval_gate.approvers.userGroups",
           "note": "The sample uses account._account_all_users. Replace it with a narrower authorized user group for production."
+        }
+      ]
+    },
+    {
+      "complexity": "advanced",
+      "id": "pipeline-failure-rca",
+      "name": "Pipeline Failure RCA",
+      "identifier": "pipelineFailureRca",
+      "summary": "Prepare an execution reference, diagnose the Harness failure, export the RCA, and optionally post it to Slack.",
+      "runtimeInputs": [
+        "llmConnector",
+        "modelName",
+        "team_name",
+        "request_json",
+        "atlassian_cloud_id",
+        "harness_api_key_secret",
+        "harness_account_id",
+        "harness_org",
+        "harness_project",
+        "slack_channel_id",
+        "slack_thread_ts",
+        "slack_bot_token_secret",
+        "services",
+        "confluence_space",
+        "open_fix_pr"
+      ],
+      "lifecycle": [
+        "build",
+        "release"
+      ],
+      "modules": [
+        "ci",
+        "cd",
+        "platform"
+      ],
+      "triggers": [
+        "failed_pipeline",
+        "pipeline"
+      ],
+      "agentIds": [
+        "ca_pipeline_failure_rca"
+      ],
+      "yamlFile": "pipeline-failure-rca.pipeline.yaml",
+      "stages": [
+        "Prepare Request",
+        "Run Pipeline Failure RCA",
+        "Export Summary",
+        "Post Summary To Slack"
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT",
+        "Optional Atlassian MCP connector",
+        "Optional Slack bot token"
+      ],
+      "configuration": [
+        {
+          "key": "request_json",
+          "label": "Request JSON",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
+        },
+        {
+          "key": "harness_api_key_secret",
+          "label": "Harness PAT secret expression",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "pipeline.variables.harness_api_key_secret",
+          "note": "Pass a Harness secret expression, never a literal token."
+        },
+        {
+          "key": "slack",
+          "label": "Slack posting",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "pipeline.variables.slack_channel_id",
+          "note": "Leave both channel and thread empty to skip posting; the generated summary remains in execution logs."
+        }
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "complexity": "advanced",
+      "id": "change-advisory",
+      "name": "Change Advisory Go No-Go",
+      "identifier": "changeAdvisory",
+      "summary": "Prepare a change reference, inspect Harness release evidence and optional CAB documentation, export the recommendation, and optionally post to Slack.",
+      "runtimeInputs": [
+        "llmConnector",
+        "modelName",
+        "team_name",
+        "request_json",
+        "atlassian_cloud_id",
+        "harness_api_key_secret",
+        "harness_account_id",
+        "harness_org",
+        "harness_project",
+        "slack_channel_id",
+        "slack_thread_ts",
+        "slack_bot_token_secret",
+        "confluence_space",
+        "jira_project"
+      ],
+      "lifecycle": [
+        "release",
+        "govern"
+      ],
+      "modules": [
+        "cd",
+        "ci",
+        "sto",
+        "platform"
+      ],
+      "triggers": [
+        "pipeline",
+        "approval"
+      ],
+      "agentIds": [
+        "ca_change_advisory"
+      ],
+      "yamlFile": "change-advisory.pipeline.yaml",
+      "stages": [
+        "Prepare Request",
+        "Run Change Advisory",
+        "Export Summary",
+        "Post Summary To Slack"
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT",
+        "Optional Atlassian MCP connector",
+        "Optional Slack bot token"
+      ],
+      "configuration": [
+        {
+          "key": "request_json",
+          "label": "Request JSON",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
+        },
+        {
+          "key": "harness_api_key_secret",
+          "label": "Harness PAT secret expression",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "pipeline.variables.harness_api_key_secret",
+          "note": "Pass a Harness secret expression, never a literal token."
+        },
+        {
+          "key": "slack",
+          "label": "Slack posting",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "pipeline.variables.slack_channel_id",
+          "note": "Leave both channel and thread empty to skip posting; the generated summary remains in execution logs."
+        }
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "complexity": "advanced",
+      "id": "security-finding-triage",
+      "name": "Security Finding Triage",
+      "identifier": "securityFindingTriage",
+      "summary": "Prepare a finding reference, verify it through Harness STO/SCS and Code, export triage, and optionally post to Slack.",
+      "runtimeInputs": [
+        "llmConnector",
+        "modelName",
+        "team_name",
+        "request_json",
+        "atlassian_cloud_id",
+        "harness_api_key_secret",
+        "harness_account_id",
+        "harness_org",
+        "harness_project",
+        "slack_channel_id",
+        "slack_thread_ts",
+        "slack_bot_token_secret",
+        "services",
+        "jira_project",
+        "create_ticket",
+        "open_fix_pr"
+      ],
+      "lifecycle": [
+        "secure"
+      ],
+      "modules": [
+        "sto",
+        "ci",
+        "platform"
+      ],
+      "triggers": [
+        "scan_finding",
+        "pipeline"
+      ],
+      "agentIds": [
+        "ca_security_finding_triage"
+      ],
+      "yamlFile": "security-finding-triage.pipeline.yaml",
+      "stages": [
+        "Prepare Request",
+        "Run Security Finding Triage",
+        "Export Summary",
+        "Post Summary To Slack"
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT",
+        "Optional Atlassian MCP connector",
+        "Optional Slack bot token"
+      ],
+      "configuration": [
+        {
+          "key": "request_json",
+          "label": "Request JSON",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
+        },
+        {
+          "key": "harness_api_key_secret",
+          "label": "Harness PAT secret expression",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "pipeline.variables.harness_api_key_secret",
+          "note": "Pass a Harness secret expression, never a literal token."
+        },
+        {
+          "key": "slack",
+          "label": "Slack posting",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "pipeline.variables.slack_channel_id",
+          "note": "Leave both channel and thread empty to skip posting; the generated summary remains in execution logs."
+        }
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "complexity": "advanced",
+      "id": "runbook-drift",
+      "name": "Runbook Drift Detector",
+      "identifier": "runbookDrift",
+      "summary": "Compare Confluence runbooks with real Harness pipelines and repositories, export drift, and optionally open a docs PR or post to Slack.",
+      "runtimeInputs": [
+        "llmConnector",
+        "modelName",
+        "team_name",
+        "request_json",
+        "atlassian_cloud_id",
+        "harness_api_key_secret",
+        "harness_account_id",
+        "harness_org",
+        "harness_project",
+        "slack_channel_id",
+        "slack_thread_ts",
+        "slack_bot_token_secret",
+        "confluence_space",
+        "pipeline_ids",
+        "open_docs_pr",
+        "docs_repo_id"
+      ],
+      "lifecycle": [
+        "govern",
+        "plan"
+      ],
+      "modules": [
+        "ci",
+        "cd",
+        "platform"
+      ],
+      "triggers": [
+        "scheduled",
+        "pipeline"
+      ],
+      "agentIds": [
+        "ca_runbook_drift"
+      ],
+      "yamlFile": "runbook-drift.pipeline.yaml",
+      "stages": [
+        "Prepare Request",
+        "Run Runbook Drift",
+        "Export Summary",
+        "Post Summary To Slack"
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT",
+        "Atlassian MCP connector",
+        "Optional Slack bot token"
+      ],
+      "configuration": [
+        {
+          "key": "request_json",
+          "label": "Request JSON",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
+        },
+        {
+          "key": "harness_api_key_secret",
+          "label": "Harness PAT secret expression",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "pipeline.variables.harness_api_key_secret",
+          "note": "Pass a Harness secret expression, never a literal token."
+        },
+        {
+          "key": "slack",
+          "label": "Slack posting",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "pipeline.variables.slack_channel_id",
+          "note": "Leave both channel and thread empty to skip posting; the generated summary remains in execution logs."
+        }
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "complexity": "advanced",
+      "id": "incident-comms",
+      "name": "Incident Customer Comms",
+      "identifier": "incidentComms",
+      "summary": "Prepare incident facts, add optional Harness execution and Confluence template context, export internal and customer drafts, and optionally post to Slack.",
+      "runtimeInputs": [
+        "llmConnector",
+        "modelName",
+        "team_name",
+        "request_json",
+        "atlassian_cloud_id",
+        "harness_api_key_secret",
+        "harness_account_id",
+        "harness_org",
+        "harness_project",
+        "slack_channel_id",
+        "slack_thread_ts",
+        "slack_bot_token_secret",
+        "status_template",
+        "severity"
+      ],
+      "lifecycle": [
+        "monitor",
+        "release"
+      ],
+      "modules": [
+        "ci",
+        "cd",
+        "platform"
+      ],
+      "triggers": [
+        "failed_pipeline",
+        "pipeline"
+      ],
+      "agentIds": [
+        "ca_incident_comms"
+      ],
+      "yamlFile": "incident-comms.pipeline.yaml",
+      "stages": [
+        "Prepare Request",
+        "Run Incident Comms",
+        "Export Summary",
+        "Post Summary To Slack"
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Harness PAT",
+        "Optional Atlassian MCP connector",
+        "Optional Slack bot token"
+      ],
+      "configuration": [
+        {
+          "key": "request_json",
+          "label": "Request JSON",
+          "kind": "input",
+          "requirement": "required",
+          "field": "pipeline.variables.request_json",
+          "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
+        },
+        {
+          "key": "harness_api_key_secret",
+          "label": "Harness PAT secret expression",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "pipeline.variables.harness_api_key_secret",
+          "note": "Pass a Harness secret expression, never a literal token."
+        },
+        {
+          "key": "slack",
+          "label": "Slack posting",
+          "kind": "value",
+          "requirement": "optional",
+          "field": "pipeline.variables.slack_channel_id",
+          "note": "Leave both channel and thread empty to skip posting; the generated summary remains in execution logs."
+        }
+      ],
+      "useCases": [
+        "enterprise"
+      ]
+    },
+    {
+      "complexity": "advanced",
+      "id": "container-vuln-remediation",
+      "name": "Container Vulnerability Remediation",
+      "identifier": "containerVulnRemediation",
+      "summary": "Build a local image, scan with Trivy, and on CRITICAL/HIGH findings run up to two agent remediation rounds, rebuild, rescan, then commit a fix branch and open a pull request.",
+      "runtimeInputs": [
+        "llmConnector",
+        "modelName",
+        "cloudConnector",
+        "awsAccountId",
+        "imageName",
+        "dockerfile",
+        "harness_api_key_secret",
+        "repoOwner",
+        "repoName",
+        "scm_token_secret"
+      ],
+      "lifecycle": [
+        "secure",
+        "build"
+      ],
+      "modules": [
+        "ci",
+        "sto"
+      ],
+      "triggers": [
+        "pipeline",
+        "scan_finding"
+      ],
+      "useCases": [
+        "enterprise"
+      ],
+      "agentIds": [
+        "ca_container_vuln_remediation"
+      ],
+      "yamlFile": "container-vuln-remediation.pipeline.yaml",
+      "stages": [
+        "Build Image",
+        "Security Container",
+        "Remediation Steps"
+      ],
+      "prerequisites": [
+        "LLM connector",
+        "Cloud connector for BuildAndPushECR",
+        "Harness API key or PAT secret for STO issue reads",
+        "GitHub token secret if the pipeline should open a pull request"
+      ],
+      "configuration": [
+        {
+          "key": "llmConnector",
+          "label": "LLM connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "pipeline.variables.llmConnector",
+          "note": "Set this to an accessible account, org, or project AI connector reference."
+        },
+        {
+          "key": "cloudConnector",
+          "label": "Cloud connector",
+          "kind": "connector",
+          "requirement": "required",
+          "field": "pipeline.variables.cloudConnector",
+          "note": "AWS connector used by BuildAndPushECR. The sample sets PLUGIN_NO_PUSH=true so the image stays local for Trivy."
+        },
+        {
+          "key": "harness_api_key_secret",
+          "label": "Harness API key secret expression",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "pipeline.variables.harness_api_key_secret",
+          "note": "Pass a Harness secret expression, never a literal token."
+        },
+        {
+          "key": "scm_token_secret",
+          "label": "SCM token secret expression",
+          "kind": "secret",
+          "requirement": "required",
+          "field": "pipeline.variables.scm_token_secret",
+          "note": "Replace YOUR_SCM_TOKEN_SECRET with a GitHub token that can open pull requests."
         }
       ]
     }

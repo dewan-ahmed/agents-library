@@ -1,0 +1,168 @@
+version: 1
+agent:
+  step:
+    group:
+      steps:
+        - name: Agent
+          if: <+Always>
+          id: agent
+          run:
+            container:
+              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest
+            env:
+              PLUGIN_MAX_TURNS: "150"
+              PLUGIN_HARNESS_CONNECTOR: ${{inputs.llmConnector.id}}
+              ANTHROPIC_MODEL: ${{inputs.modelName}}
+              PLUGIN_TASK: |
+                You are a DevOps and Security Engineer responsible for remediating container image vulnerabilities in a single, comprehensive pass.
+
+                ## Vulnerability Report
+                ${{inputs.remediationDetails}}
+
+                ## Structured issue report (if provided)
+                If a path is set in the remediationReport input, read that JSON file and use it as the source of truth for CVE, severity, library, current version, and fixed version.
+
+                Path: ${{inputs.remediationReport}}
+
+                ## Previous Remediation Attempts (if any)
+                ${{inputs.previousAttempts}}
+
+                ## Your Mission
+                Analyze ALL vulnerabilities and produce a SINGLE comprehensive fix. Do NOT make incremental changes — this is your only pass.
+
+                ## Analysis Framework
+
+                ### Step 1: Categorize Every CVE
+                For each vulnerability, classify it:
+                - **FIXABLE**: Has a `fixed` version → Will be remediated
+                - **UNFIXABLE_OS**: `fixed: null` for OS packages → Requires base image change or risk acceptance
+                - **UNFIXABLE_APP**: `fixed: null` for app dependencies → Requires code change or risk acceptance
+
+                ### Step 2: Identify Root Cause
+                Most container CVEs stem from one of these:
+                1. **Outdated base image** (e.g., old Debian/Ubuntu) → Fix: Update to latest tag or switch distro
+                2. **Wrong distro choice** (Debian has more packages = more CVEs than Alpine) → Fix: Switch to Alpine variant
+                3. **Outdated application dependencies** → Fix: Update package.json, requirements.txt, go.mod, etc.
+                4. **Inherited from parent image** → Fix: Choose a different parent or build from scratch
+
+                ### Step 3: Select Remediation Strategy
+
+                **Strategy A: Base Image Upgrade (try first)**
+                - For nginx: `nginx:alpine` or `nginx:1.27-alpine` (minimal attack surface)
+                - For node: `node:20-alpine` instead of `node:20-bookworm`
+                - For python: `python:3.12-alpine` or `python:3.12-slim`
+                - For general apps: Consider `gcr.io/distroless/*` images
+
+                **Strategy B: In-place Package Upgrade (if Strategy A not viable)**
+                - Add `apt-get update && apt-get upgrade -y` for Debian/Ubuntu
+                - Add `apk upgrade --no-cache` for Alpine
+                - Pin specific package versions when fixes are available
+
+                **Strategy C: Risk Acceptance (for truly unfixable CVEs)**
+                - Create/update `.trivyignore` file with CVE IDs
+                - Add inline comments explaining why each CVE is accepted:
+                  - No fix available upstream
+                  - Package not used at runtime
+                  - Mitigated by other controls
+
+                ## Output Requirements
+
+                ### 1. Produce a Single, Complete Fix
+                Make all necessary edits in one pass:
+                - Update Dockerfile(s)
+                - Update dependency files if needed
+                - Create .trivyignore for unfixable CVEs
+
+                ### 2. Document Your Decisions
+                After making changes, write a summary to /harness/agent-summary.md:
+
+                Remediation Summary
+                Fixed (X CVEs)
+                Switched base image from X to Y, resolving CVEs: ...
+                Upgraded package Z to version W, resolving CVEs: ...
+                Accepted Risk (Y CVEs)
+                CVE-XXXX: No fix available, package not used at runtime
+                CVE-YYYY: Disputed, no real-world exploit path
+                Requires Manual Review (Z CVEs)
+                CVE-ZZZZ: Requires application code change in [file]
+
+                ## Constraints
+                1. Do NOT add unnecessary packages or dependencies
+                2. Do NOT break the application (preserve COPY, ENTRYPOINT, CMD, etc.)
+                3. Do NOT make changes to files outside /harness
+                4. Prefer Alpine-based images when the application supports them
+                5. If switching to Alpine breaks the build, document why and use Strategy B instead
+                6. Do not perform git operations. A downstream pipeline step commits and opens the PR.
+
+                ## Anti-Patterns to Avoid
+                - Making one small change and waiting for rescan
+                - Adding `apt-get upgrade` without first considering Alpine
+                - Ignoring CVEs with `fixed: null` (address them explicitly)
+                - Repeated attempts at the same failing strategy
+
+                ## Example: nginx Dockerfile Remediation
+
+                Before:
+                ```dockerfile
+                FROM nginx:1.14.2
+                COPY dist /usr/share/nginx/html
+                ```
+
+                After (Strategy A - Alpine):
+                ```dockerfile
+                FROM nginx:1.27-alpine
+                COPY dist /usr/share/nginx/html
+                ```
+
+                Or After (Strategy B - if Alpine not viable):
+                ```dockerfile
+                FROM nginx:1.27-bookworm
+                RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
+                COPY dist /usr/share/nginx/html
+                ```
+
+                With .trivyignore (Strategy C - for unfixable CVEs):
+                ```
+                # No fix available in Debian repos as of 2024-08
+                CVE-2024-XXXXX
+                # Disputed - requires local access which container doesn't provide
+                CVE-2024-YYYYY
+                ```
+
+                Begin
+                1. Locate all Dockerfiles: find /harness -name "Dockerfile*"
+                2. Read each Dockerfile and analyze against the vulnerability list
+                3. Determine the best strategy for each Dockerfile
+                4. Apply ALL fixes in a single edit session
+                5. Output your remediation summary
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    remediationDetails:
+      type: string
+      required: true
+    previousAttempts:
+      type: string
+      required: false
+      default: ""
+    remediationReport:
+      type: string
+      required: false
+      default: ""
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - remediationDetails
+        - previousAttempts
+        - remediationReport
