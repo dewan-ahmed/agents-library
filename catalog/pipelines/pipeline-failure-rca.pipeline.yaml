@@ -1,6 +1,6 @@
 pipeline:
-  name: Security Finding Triage
-  identifier: securityFindingTriage
+  name: Pipeline Failure RCA
+  identifier: pipelineFailureRca
   projectIdentifier: "{{projectId}}"
   orgIdentifier: "{{orgId}}"
   tags: {}
@@ -26,19 +26,14 @@ pipeline:
       value: <+input>
     - name: services
       type: String
-      description: Comma-separated repositories a fix branch may target.
+      description: Comma-separated repositories and pipelines this team owns.
       required: true
       value: <+input>
-    - name: jira_project
+    - name: confluence_space
       type: String
-      description: Jira project searched for duplicates. Leave empty to skip Jira.
+      description: Confluence space key holding runbooks. Leave empty to skip Confluence.
       required: false
       value: <+input>
-    - name: create_ticket
-      type: String
-      description: If true, create at most one Jira issue when no duplicate exists.
-      required: true
-      value: <+input>.default(false)
     - name: open_fix_pr
       type: String
       description: If true, the agent may open one low-risk fix PR.
@@ -184,11 +179,11 @@ pipeline:
                         value: REQUEST_B64
               - step:
                   type: Agent
-                  name: Run Security Finding Triage
+                  name: Run Pipeline Failure RCA
                   identifier: run_agent_step
                   timeout: 40m
                   spec:
-                    agentName: ca_security_finding_triage
+                    agentName: ca_pipeline_failure_rca
                     agentSettings: |-
                       {
                         "llmConnector": "<+pipeline.variables.llmConnector>",
@@ -196,8 +191,7 @@ pipeline:
                         "modelName": "<+pipeline.variables.modelName>",
                         "agent_request_b64": "<+execution.steps.prepare_request.output.outputVariables.REQUEST_B64>",
                         "services": "<+pipeline.variables.services>",
-                        "jira_project": "<+pipeline.variables.jira_project>",
-                        "create_ticket": "<+pipeline.variables.create_ticket>",
+                        "confluence_space": "<+pipeline.variables.confluence_space>",
                         "open_fix_pr": "<+pipeline.variables.open_fix_pr>",
                         "atlassian_cloud_id": "<+pipeline.variables.atlassian_cloud_id>",
                         "harness_api_key": "<+pipeline.variables.harness_api_key_secret>",

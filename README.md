@@ -27,8 +27,8 @@ Open the URL Vite prints (usually `http://localhost:5173`).
 
 ## What is in this version
 
-- Homepage chat/search across 31 Harness-managed marketplace agents plus 11 curated custom agents
-- Browse `/agents` and all 42 corresponding pipeline samples with filters
+- Homepage chat/search across 31 Harness-managed marketplace agents plus 12 curated custom agents
+- Browse `/agents` and all 43 corresponding pipeline samples with filters, including an **enterprise** use-case filter for the customer worker agents
 - Optional account / org / project IDs in the browser only
 - **Open in Harness** using each agent's `type=system` or `type=custom`
 - **Copy YAML** with `{{orgId}}` / `{{projectId}}` substitution
@@ -45,37 +45,51 @@ These files are the source catalog:
 
 The PAT secret in the test-summarizer pipeline was replaced with `harness_code_pat` in the copyable YAML.
 
-## Advanced multi-provider agents
+## Advanced customer worker agents
 
-Five custom agents go beyond a single agent step and are meant to run in a customer's own
-environment against their own providers: `ca_oncall_rca`, `ca_change_advisory`,
-`ca_security_finding_triage`, `ca_runbook_drift`, and `ca_incident_comms`.
+Six custom agents are meant to run in a customer's Harness project. Five of them
+target Harness CI/Code, optional Confluence/Jira via Atlassian MCP, and optional Slack:
 
-They share one architecture:
+`ca_pipeline_failure_rca`, `ca_change_advisory`, `ca_security_finding_triage`,
+`ca_runbook_drift`, and `ca_incident_comms`.
 
-- A first step installs stdio MCP runtimes (`uvx` for Grafana and PagerDuty, Node for
-  `harness-mcp-v2`), writes each credential to a `0600` file rather than interpolating it into a
-  script, and emits `/harness/.agent/mcp-servers.json`.
-- Connector-backed MCP (Atlassian) is mounted separately through `mcpConnectors`.
+`ca_container_vuln_remediation` is the sixth. It remediates container image CVEs
+from STO/Trivy findings by editing Dockerfiles in one pass. The sample pipeline
+rebuilds a local image (`PLUGIN_NO_PUSH=true`), rescans, and can open a GitHub PR.
+
+The first five share one architecture:
+
+- A first step installs Node for `harness-mcp-v2`, writes the Harness PAT to a
+  `0600` file, and emits `/harness/.agent/mcp-servers.json`.
+- Connector-backed Atlassian MCP (type `Mcp`, not a native Confluence connector)
+  is mounted through `mcpConnectors`.
 - An optional team skill pack is sparse-checked out into
-  `/harness/.agent/plugins/team-skills`, and those skills override the inline instructions.
-- The agent writes `/harness/.agent/output/summary.md`; the pipeline exports it and decides
-  whether to post to Slack. Agents never post.
+  `/harness/.agent/plugins/team-skills`, and those skills override the inline
+  instructions.
+- The agent writes `/harness/.agent/output/summary.md`; the pipeline exports it
+  and decides whether to post to Slack. Agents never post.
 
-Every credential is an input backed by a Harness secret expression, and tenant-specific values
-such as the Atlassian `cloudId` are inputs, so nothing account-specific lives in this repo.
-Replace the `YOUR_LLM_CONNECTOR`, `YOUR_MODEL_ID`, `YOUR_ATLASSIAN_MCP_CONNECTOR`, and
-`monitoring.example.com` placeholders before use.
+Replace `YOUR_LLM_CONNECTOR`, `YOUR_MODEL_ID`, and `YOUR_ATLASSIAN_MCP_CONNECTOR`
+before use. End-to-end setup, request JSON examples, and which writes are
+flag-gated are in [docs/customer-agent-usage.md](docs/customer-agent-usage.md).
 
 ## Validate the catalog
 
+Custom agent+pipeline combos only. Marketplace samples under `catalog/pipelines/marketplace/` are generated and are not part of this gate.
+
 ```bash
 cd web
-node scripts/validate-catalog.mjs
+npm run validate:catalog
 ```
 
-This parses every agent and pipeline YAML and checks that each pipeline's `agentName` matches the
-`agentIds` and `yamlFile` recorded in `catalog/catalog.json`.
+This parses every custom agent and pipeline YAML, checks that each pipeline's `agentName` matches `catalog.json`, and requires a 1:1 combo list in `catalog/test/combos.json`. After adding a custom pair, regenerate that list:
+
+```bash
+cd web
+node scripts/validate-catalog.mjs --write-combos
+```
+
+A sample Harness pipeline that clones this repo and runs the same check is `catalog/test/validate-custom-combos.pipeline.yaml`. It is a test harness, not a catalog product pipeline.
 
 ## Refresh the marketplace
 

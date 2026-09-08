@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { agentById, yamlForPipeline, pipelineById } from "../catalog";
+import { agentById, pipelineById, useCasesOf, yamlForPipeline } from "../catalog";
 import { YamlBlock } from "../components/YamlBlock";
 import { ConfigChecklist } from "../components/ConfigChecklist";
 import { agentConsoleUrl, applyYamlScope, type HarnessScope } from "../scope";
@@ -19,7 +19,10 @@ export function PipelineDetailPage({ scope }: { scope: HarnessScope }) {
 
   return (
     <div className="page">
-      <div className="kicker">{pipeline.complexity} · {pipeline.identifier}</div>
+      <div className="kicker">
+        {pipeline.complexity} · {pipeline.identifier}
+        {useCasesOf(pipeline).includes("enterprise") ? " · enterprise" : ""}
+      </div>
       <div className="detail-head">
         <div>
           <h1 style={{ margin: "8px 0" }}>{pipeline.name}</h1>

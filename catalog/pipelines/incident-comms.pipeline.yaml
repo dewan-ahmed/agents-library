@@ -7,7 +7,7 @@ pipeline:
   variables:
     - name: llmConnector
       type: String
-      description: Account, org, or project LLM connector reference, for example account.YOUR_LLM_CONNECTOR.
+      description: Account, org, or project LLM connector reference, for example account.harnessAnthropic.
       required: true
       value: <+input>
     - name: modelName
@@ -21,59 +21,63 @@ pipeline:
       value: <+input>
     - name: request_json
       type: String
-      description: JSON with PagerDuty incident id and optional Grafana links.
-      required: true
-      value: <+input>
-    - name: atlassian_cloud_id
-      type: String
+      description: JSON request payload for this agent. See the usage guide for the shape.
       required: true
       value: <+input>
     - name: status_template
       type: String
-      description: Confluence page id or title for the status-page template.
-      required: true
+      description: Confluence page id or title for the status template. Leave empty to use the built-in shape.
+      required: false
       value: <+input>
     - name: severity
       type: String
+      description: Incident severity, for example SEV1 or SEV2.
       required: true
       value: <+input>
-    - name: pagerduty_api_key_secret
+    - name: atlassian_cloud_id
       type: String
-      required: true
-      value: <+input>
-    - name: post_customer_draft
-      type: String
-      description: If true, Slack post includes the customer block. Still Slack-only; never publishes a status page.
-      required: true
-      value: <+input>.default(false)
-    - name: grafana_url
-      type: String
+      description: Atlassian cloudId, required only when using Confluence or Jira.
       required: false
       value: <+input>
-    - name: grafana_token_secret
+    - name: harness_api_key_secret
       type: String
-      description: Expression that resolves to a Grafana service-account token.
-      required: false
+      description: Expression that resolves to a Harness PAT, for example <+secrets.getValue("harness_pat")>.
+      required: true
       value: <+input>
-
+    - name: harness_base_url
+      type: String
+      required: true
+      value: <+input>.default(https://app.harness.io)
+    - name: harness_account_id
+      type: String
+      required: true
+      value: <+input>
+    - name: harness_org
+      type: String
+      required: true
+      value: <+input>
+    - name: harness_project
+      type: String
+      required: true
+      value: <+input>
     - name: slack_channel_id
       type: String
-      description: Slack channel id, or leave empty when slack_thread_ts is a permalink.
+      description: Slack channel id. Leave empty to skip posting.
       required: false
       value: <+input>
     - name: slack_thread_ts
       type: String
-      description: Slack permalink or thread timestamp for the reply.
+      description: Slack permalink or thread timestamp to reply in.
       required: false
       value: <+input>
     - name: slack_bot_token_secret
       type: String
-      description: Expression that resolves to a Slack bot token (chat:write; history if reading a permalink).
+      description: Expression that resolves to a Slack bot token with chat:write.
       required: false
       value: <+input>
     - name: team_skill_git_url
       type: String
-      description: Optional git HTTPS URL for a team skill pack (plugin.json + skills/).
+      description: Optional git repo holding a team skill pack.
       required: false
       value: <+input>
     - name: team_skill_git_ref
@@ -93,7 +97,6 @@ pipeline:
       description: Expression that resolves to a git PAT for the skill pack checkout.
       required: false
       value: <+input>
-
   stages:
     - stage:
         name: Run Agent
@@ -109,7 +112,6 @@ pipeline:
             spec: {}
           execution:
             steps:
-
               - step:
                   type: Run
                   name: Prepare Request
@@ -126,11 +128,13 @@ pipeline:
 
                       unresolved_prefix = chr(60) + chr(43)
 
+
                       def configured(name):
                           value = (os.environ.get(name) or "").strip()
                           if not value or value == "null" or value.startswith(unresolved_prefix):
                               return ""
                           return value
+
 
                       raw = configured("REQUEST_JSON")
                       if not raw:
@@ -142,6 +146,9 @@ pipeline:
                               body = json.loads(body)
                       except json.JSONDecodeError as exc:
                           print("request_json is not valid JSON: " + str(exc), file=sys.stderr)
+                          sys.exit(1)
+                      if not isinstance(body, dict):
+                          print("request_json must be a JSON object", file=sys.stderr)
                           sys.exit(1)
                       encoded = base64.b64encode(json.dumps(body, separators=(",", ":")).encode()).decode()
                       print("REQUEST_B64=" + encoded)
@@ -165,32 +172,33 @@ pipeline:
                       - name: REQUEST_B64
                         type: String
                         value: REQUEST_B64
-
               - step:
                   type: Agent
                   name: Run Incident Comms
-                  identifier: run_incident_comms
+                  identifier: run_agent_step
                   timeout: 40m
                   spec:
                     agentName: ca_incident_comms
                     agentSettings: |-
                       {
+                        "llmConnector": "<+pipeline.variables.llmConnector>",
                         "team_name": "<+pipeline.variables.team_name>",
                         "modelName": "<+pipeline.variables.modelName>",
                         "agent_request_b64": "<+execution.steps.prepare_request.output.outputVariables.REQUEST_B64>",
-                        "atlassian_cloud_id": "<+pipeline.variables.atlassian_cloud_id>",
                         "status_template": "<+pipeline.variables.status_template>",
                         "severity": "<+pipeline.variables.severity>",
-                        "grafana_url": "<+pipeline.variables.grafana_url>",
-                        "grafana_token": "<+pipeline.variables.grafana_token_secret>",
-                        "pagerduty_api_key": "<+pipeline.variables.pagerduty_api_key_secret>",
+                        "atlassian_cloud_id": "<+pipeline.variables.atlassian_cloud_id>",
+                        "harness_api_key": "<+pipeline.variables.harness_api_key_secret>",
+                        "harness_base_url": "<+pipeline.variables.harness_base_url>",
+                        "harness_account_id": "<+pipeline.variables.harness_account_id>",
+                        "harness_org": "<+pipeline.variables.harness_org>",
+                        "harness_project": "<+pipeline.variables.harness_project>",
                         "team_skill_git_url": "<+pipeline.variables.team_skill_git_url>",
                         "team_skill_git_ref": "<+pipeline.variables.team_skill_git_ref>",
                         "team_skill_path": "<+pipeline.variables.team_skill_path>",
                         "plugin_git_user": "<+pipeline.variables.plugin_git_user>",
                         "plugin_git_token": "<+pipeline.variables.plugin_git_token_secret>"
                       }
-
               - step:
                   type: Run
                   name: Export Summary
@@ -210,12 +218,11 @@ pipeline:
                       cat "$SUMMARY_FILE"
                       echo "--- End summary ---"
                       SUMMARY_B64="$(python3 -c 'import base64,pathlib; print(base64.b64encode(pathlib.Path("/harness/.agent/output/summary.md").read_bytes()).decode(), end="")')"
-                      echo "SUMMARY_B64=$SUMMARY_B64"
+                      echo "SUMMARY_B64=${SUMMARY_B64}"
                     outputVariables:
                       - name: SUMMARY_B64
                         type: String
                         value: SUMMARY_B64
-
               - step:
                   type: Run
                   name: Post Summary To Slack
@@ -242,6 +249,7 @@ pipeline:
                       SLACK_P_RE = re.compile(r"(?:^|/)p(\d{10,})(?:\b|[/?#]|$)")
                       SLACK_CHANNEL_RE = re.compile(r"/archives/([CGD][A-Z0-9]+)/", re.I)
 
+
                       def normalize_slack_ts(raw):
                           value = (raw or "").strip().strip('"').strip("'")
                           unresolved_prefix = chr(60) + chr(43)
@@ -254,6 +262,7 @@ pipeline:
                           if not digits or len(digits) <= 6:
                               return ""
                           return digits[:-6] + "." + digits[-6:]
+
 
                       token = (os.environ.get("SLACK_BOT_TOKEN") or "").strip()
                       if not token:
@@ -291,7 +300,6 @@ pipeline:
                           raise RuntimeError("chat.postMessage: " + str(data.get("error")))
                       print("Posted Slack ts=" + str(data.get("ts")))
                       PY
-
         failureStrategies:
           - onFailure:
               errors:

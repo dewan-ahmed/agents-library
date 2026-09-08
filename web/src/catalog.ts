@@ -31,6 +31,7 @@ export type Agent = {
   scope: string;
   version: string;
   availability?: "available" | "coming_soon";
+  useCases?: string[];
   inputs: string[];
   configuration: ConfigItem[];
   prerequisites: string[];
@@ -47,6 +48,7 @@ export type Pipeline = {
   triggers: string[];
   complexity: string;
   availability?: "available" | "coming_soon";
+  useCases?: string[];
   agentIds: string[];
   yamlFile: string;
   stages: string[];
@@ -94,4 +96,8 @@ export function ownershipLabel(ownership: Ownership) {
   if (ownership === "harness_verified") return "Harness verified";
   if (ownership === "harness_managed") return "Harness managed";
   return "Custom";
+}
+
+export function useCasesOf(item: { useCases?: string[] }) {
+  return item.useCases ?? [];
 }

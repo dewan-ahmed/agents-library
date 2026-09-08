@@ -1,12 +1,15 @@
 #!/usr/bin/env node
-// Validates catalog YAML/JSON structure and cross-references.
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+// Validates custom catalog YAML/JSON structure and agent+pipeline combos.
+// Marketplace samples under catalog/pipelines/marketplace/ are out of scope.
+import { readFileSync, readdirSync, existsSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const catalogDir = join(here, "..", "..", "catalog");
+const combosPath = join(catalogDir, "test", "combos.json");
+const writeCombos = process.argv.includes("--write-combos");
 const errors = [];
 const warnings = [];
 
@@ -19,13 +22,24 @@ function parseYaml(path) {
   }
 }
 
+function walkAgentNames(node, acc = []) {
+  if (Array.isArray(node)) {
+    node.forEach((item) => walkAgentNames(item, acc));
+    return acc;
+  }
+  if (node && typeof node === "object") {
+    if (typeof node.agentName === "string") acc.push(node.agentName.split("@")[0]);
+    Object.values(node).forEach((value) => walkAgentNames(value, acc));
+  }
+  return acc;
+}
+
 const agentFiles = readdirSync(join(catalogDir, "agents")).filter((f) => f.endsWith(".yaml"));
 const agentDocs = new Map();
 for (const file of agentFiles) {
   const doc = parseYaml(join(catalogDir, "agents", file));
   if (!doc) continue;
   agentDocs.set(file.replace(/\.yaml$/, ""), doc);
-  // Two accepted shapes: a standalone agent spec, or a raw template-wrapper dump.
   if (doc.template) continue;
   if (doc.version !== 1) errors.push(`agents/${file}: expected version: 1`);
   if (!doc.agent?.step) errors.push(`agents/${file}: missing agent.step`);
@@ -44,20 +58,12 @@ for (const file of pipelineFiles) {
   }
   if (pipeline.orgIdentifier !== "{{orgId}}") errors.push(`pipelines/${file}: orgIdentifier must be {{orgId}}`);
   if (pipeline.projectIdentifier !== "{{projectId}}") errors.push(`pipelines/${file}: projectIdentifier must be {{projectId}}`);
-  const refs = [];
-  const walk = (node) => {
-    if (Array.isArray(node)) return node.forEach(walk);
-    if (node && typeof node === "object") {
-      if (typeof node.agentName === "string") refs.push(node.agentName.split("@")[0]);
-      Object.values(node).forEach(walk);
-    }
-  };
-  walk(pipeline);
-  pipelineAgentRefs.set(file, refs);
+  pipelineAgentRefs.set(file, walkAgentNames(pipeline));
 }
 
 const catalog = JSON.parse(readFileSync(join(catalogDir, "catalog.json"), "utf8"));
 const catalogAgentIds = new Set(catalog.agents.map((a) => a.id));
+const referencedAgentIds = new Set();
 
 for (const agent of catalog.agents) {
   if (!agentDocs.has(agent.id)) errors.push(`catalog.json: agent ${agent.id} has no catalog/agents/${agent.id}.yaml`);
@@ -67,38 +73,83 @@ for (const agent of catalog.agents) {
   }
 }
 
+const combos = [];
 for (const pipeline of catalog.pipelines) {
   const yamlPath = join(catalogDir, "pipelines", pipeline.yamlFile);
   if (!existsSync(yamlPath)) {
     errors.push(`catalog.json: pipeline ${pipeline.id} references missing ${pipeline.yamlFile}`);
     continue;
   }
-  for (const agentId of pipeline.agentIds ?? []) {
+  const agentIds = pipeline.agentIds ?? [];
+  if (agentIds.length === 0) {
+    errors.push(`catalog.json: pipeline ${pipeline.id} has no agentIds`);
+  }
+  for (const agentId of agentIds) {
+    referencedAgentIds.add(agentId);
     if (!catalogAgentIds.has(agentId)) {
-      warnings.push(`catalog.json: pipeline ${pipeline.id} references agent ${agentId} not in catalog.agents`);
+      errors.push(`catalog.json: pipeline ${pipeline.id} references agent ${agentId} which is not in catalog.agents`);
     }
+    combos.push({
+      agentId,
+      pipelineId: pipeline.id,
+      pipelineIdentifier: pipeline.identifier,
+      agentFile: `catalog/agents/${agentId}.yaml`,
+      pipelineFile: `catalog/pipelines/${pipeline.yamlFile}`,
+    });
   }
   const refs = pipelineAgentRefs.get(pipeline.yamlFile) ?? [];
   for (const ref of refs) {
-    if (!(pipeline.agentIds ?? []).includes(ref)) {
-      errors.push(`catalog.json: pipeline ${pipeline.id} yaml uses agentName ${ref} but agentIds is ${JSON.stringify(pipeline.agentIds)}`);
+    if (!agentIds.includes(ref)) {
+      errors.push(`catalog.json: pipeline ${pipeline.id} yaml uses agentName ${ref} but agentIds is ${JSON.stringify(agentIds)}`);
+    }
+    if (!catalogAgentIds.has(ref)) {
+      errors.push(`pipelines/${pipeline.yamlFile}: agentName ${ref} is not a custom catalog agent`);
     }
   }
 }
 
-// Agent YAML files referenced by a pipeline must exist.
+for (const agent of catalog.agents) {
+  if (!referencedAgentIds.has(agent.id)) {
+    errors.push(`catalog.json: agent ${agent.id} has no custom pipeline combo`);
+  }
+}
+
 for (const [file, refs] of pipelineAgentRefs) {
   for (const ref of refs) {
-    if (!agentDocs.has(ref) && !ref.startsWith("ca_") === false) {
-      // only warn for custom (ca_) agents; marketplace agents live elsewhere
-      if (!agentDocs.has(ref)) warnings.push(`pipelines/${file}: agentName ${ref} has no catalog/agents YAML`);
+    if (!catalogAgentIds.has(ref)) {
+      errors.push(`pipelines/${file}: agentName ${ref} is not a custom catalog agent (marketplace samples are not validated here)`);
     }
   }
 }
 
-console.log(`Parsed ${agentFiles.length} agent YAML, ${pipelineFiles.length} pipeline YAML.`);
-console.log(`catalog.json: ${catalog.agents.length} agents, ${catalog.pipelines.length} pipelines.`);
+const comboDoc = {
+  scope: "custom",
+  exclude: "marketplace",
+  combos,
+};
+
+if (writeCombos) {
+  writeFileSync(combosPath, `${JSON.stringify(comboDoc, null, 2)}\n`);
+}
+
+if (existsSync(combosPath)) {
+  const onDisk = JSON.parse(readFileSync(combosPath, "utf8"));
+  const expected = JSON.stringify(comboDoc);
+  const actual = JSON.stringify({
+    scope: onDisk.scope,
+    exclude: onDisk.exclude,
+    combos: onDisk.combos,
+  });
+  if (expected !== actual) {
+    errors.push("catalog/test/combos.json is out of date. Run: node scripts/validate-catalog.mjs --write-combos");
+  }
+} else {
+  errors.push("catalog/test/combos.json is missing. Run: node scripts/validate-catalog.mjs --write-combos");
+}
+
+console.log(`Custom catalog: ${catalog.agents.length} agents, ${catalog.pipelines.length} pipelines, ${combos.length} combos.`);
+console.log(`Parsed ${agentFiles.length} agent YAML, ${pipelineFiles.length} custom pipeline YAML (marketplace/ ignored).`);
 for (const warning of warnings) console.log(`WARN  ${warning}`);
 for (const error of errors) console.log(`ERROR ${error}`);
 if (errors.length) process.exit(1);
-console.log("Catalog validation passed.");
+console.log("Custom catalog combo validation passed.");

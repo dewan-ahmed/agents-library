@@ -10,7 +10,7 @@ agent:
             script: |-
               set -euo pipefail
 
-              mkdir -p /harness/.agent-tools/bin /harness/.cache/uv \
+              mkdir -p /harness/.agent-tools/bin \
                        /harness/.agent /harness/.agent/context /harness/.agent/output \
                        /harness/.agent/plugins/team-skills/skills /harness/.agent/secrets
 
@@ -30,26 +30,43 @@ agent:
                   target.write_text("{}")
               PY
 
-              if [ ! -x /harness/.agent-tools/bin/uvx ]; then
-                UVX_PATH="$(command -v uvx || true)"
-                if [ -z "$UVX_PATH" ]; then
-                  echo "uvx is not installed in the harness-ai-agent image" >&2
-                  exit 1
-                fi
-                ln -sf "$UVX_PATH" /harness/.agent-tools/bin/uvx
+              # harness-mcp-v2 is a Node package; the agent image does not ship Node.
+              if [ ! -x /harness/.agent-tools/bin/npx ]; then
+                python3 - <<'PY'
+              import os, tarfile, urllib.request
+
+              url = "https://nodejs.org/dist/v20.17.0/node-v20.17.0-linux-x64.tar.xz"
+              tarball = "/tmp/node.tar.xz"
+              urllib.request.urlretrieve(url, tarball)
+              os.makedirs("/harness/.agent-tools/node", exist_ok=True)
+              with tarfile.open(tarball) as archive:
+                  archive.extractall("/harness/.agent-tools/node")
+              root = next(p for p in os.listdir("/harness/.agent-tools/node") if p.startswith("node-"))
+              for exe in ("node", "npm", "npx"):
+                  src = "/harness/.agent-tools/node/%s/bin/%s" % (root, exe)
+                  dst = "/harness/.agent-tools/bin/%s" % exe
+                  if os.path.lexists(dst):
+                      os.remove(dst)
+                  os.symlink(src, dst)
+              PY
               fi
-              /harness/.agent-tools/bin/uvx --version
-              UV_CACHE_DIR=/harness/.cache/uv timeout 120s /harness/.agent-tools/bin/uvx "mcp-grafana" --help
-              UV_CACHE_DIR=/harness/.cache/uv timeout 120s /harness/.agent-tools/bin/uvx "pagerduty-mcp" --help
-              mkdir -p /harness/.agent/secrets
-              cat > /harness/.agent/secrets/grafana_url <<'EOF'
-              ${{inputs.grafana_url}}
+              /harness/.agent-tools/bin/npx --version
+
+              # Credentials go to files so they are never interpolated into a command line.
+              cat > /harness/.agent/secrets/harness_api_key <<'EOF'
+              ${{inputs.harness_api_key}}
               EOF
-              cat > /harness/.agent/secrets/grafana_token <<'EOF'
-              ${{inputs.grafana_token}}
+              cat > /harness/.agent/secrets/harness_base_url <<'EOF'
+              ${{inputs.harness_base_url}}
               EOF
-              cat > /harness/.agent/secrets/pagerduty_api_key <<'EOF'
-              ${{inputs.pagerduty_api_key}}
+              cat > /harness/.agent/secrets/harness_account_id <<'EOF'
+              ${{inputs.harness_account_id}}
+              EOF
+              cat > /harness/.agent/secrets/harness_org <<'EOF'
+              ${{inputs.harness_org}}
+              EOF
+              cat > /harness/.agent/secrets/harness_project <<'EOF'
+              ${{inputs.harness_project}}
               EOF
               chmod 0600 /harness/.agent/secrets/*
 
@@ -59,36 +76,30 @@ agent:
 
               secrets = Path("/harness/.agent/secrets")
 
-              def secret(name: str) -> str:
+
+              def secret(name):
                   path = secrets / name
-                  if not path.exists():
-                      return ""
-                  return path.read_text().strip()
+                  return path.read_text().strip() if path.exists() else ""
 
-              UVX = "/harness/.agent-tools/bin/uvx"
-              NPX = "/harness/.agent-tools/bin/npx"
-              UV_ENV = {"UV_CACHE_DIR": "/harness/.cache/uv"}
 
-              def stdio_mcp(package: str, env: dict) -> dict:
-                  return {
-                      "type": "stdio",
-                      "command": UVX,
-                      "args": [package],
-                      "env": {**UV_ENV, **env},
-                  }
+              missing = [n for n in ("harness_api_key", "harness_account_id") if not secret(n)]
+              if missing:
+                  raise SystemExit("Missing required Harness credentials: " + ", ".join(missing))
 
               mcp_servers = {
-                  "grafana": stdio_mcp(
-                      "mcp-grafana",
-                      {
-                          "GRAFANA_URL": secret("grafana_url"),
-                          "GRAFANA_SERVICE_ACCOUNT_TOKEN": secret("grafana_token"),
+                  "harness": {
+                      "type": "stdio",
+                      "command": "/harness/.agent-tools/bin/npx",
+                      "args": ["-y", "harness-mcp-v2@latest"],
+                      "env": {
+                          "HARNESS_API_KEY": secret("harness_api_key"),
+                          "HARNESS_BASE_URL": secret("harness_base_url") or "https://app.harness.io",
+                          "HARNESS_ACCOUNT_ID": secret("harness_account_id"),
+                          "HARNESS_ORG": secret("harness_org"),
+                          "HARNESS_PROJECT": secret("harness_project"),
+                          "HARNESS_TOOLSETS": "repositories,pipelines",
                       },
-                  ),
-                  "pagerduty": stdio_mcp(
-                      "pagerduty-mcp",
-                      {"PAGERDUTY_USER_API_KEY": secret("pagerduty_api_key")},
-                  ),
+                  }
               }
               path = Path("/harness/.agent/mcp-servers.json")
               path.write_text(json.dumps(mcp_servers, indent=2) + "\n")
@@ -171,14 +182,14 @@ agent:
               PLUGIN_TASK: |
                 You are an incident customer-comms drafter for **${{inputs.team_name}}**.
 
-                Read `/harness/.agent/context/agent-request.json` (PagerDuty incident
-                id, severity, optional Grafana links). Write internal and customer
-                drafts to `/harness/.agent/output/summary.md`.
+                Read `/harness/.agent/context/agent-request.json`. It carries the incident
+                facts: id, service, severity, status, symptoms, customer impact, timestamps,
+                and optionally a Harness execution id. Treat this payload as the source of
+                truth. Write internal and customer drafts to
+                `/harness/.agent/output/summary.md`.
 
-                Atlassian cloudId: ${{inputs.atlassian_cloud_id}}
                 Confluence status template page id or title: ${{inputs.status_template}}
                 Severity: ${{inputs.severity}}
-
                 After reading `/harness/.agent/context/agent-request.json`, load matching
                 team skills with the Skill tool (or Read on
                 `/harness/.agent/plugins/team-skills/skills/<name>/SKILL.md`).
@@ -188,40 +199,50 @@ agent:
                 Never print secrets. If a tool fails once, record the exact error and
                 continue. Do not loop. Do not guess identifiers; name missing evidence.
 
-                Tools: PagerDuty read (get incident, alerts, notes, log entries),
-                Grafana bounded impact queries when a rule UID exists, Confluence
-                getConfluencePage for the template. Never mutate PagerDuty, Grafana,
-                Confluence, or Jira. Never page anyone. Do not post to Slack (pipeline
-                posts). Do not publish a status page.
+                Confluence and Jira come from an optional Atlassian MCP connector. If those
+                tools are not available, say "Confluence not configured" in the relevant
+                section and continue with Harness evidence only. Do not post to Slack; the
+                pipeline posts the exported summary.
+                Never page anyone. Never publish a status page. Your Harness tools are
+                read-only and are used only to add deployment context.
 
-                Customer text must not include hostnames, IPs, customer names beyond
-                what the template allows, stack traces, or internal channel names.
+                Do not invent facts. If the payload does not state a cause, an ETA, or a
+                workaround, do not imply one. Everything you assert must come from the
+                payload, the Harness execution, or the template.
+
+                Customer text must not include hostnames, IPs, internal service names beyond
+                what the template allows, stack traces, customer names, or internal channel
+                names.
 
                 Steps
-                1. Load skills (tone, banned phrases, template). Fetch the pinned PD
-                   incident only.
-                2. Fetch the Confluence status template. Follow its sections.
-                3. Optional Grafana: confirm impact window only. Skip if unmapped.
-                4. Draft two blocks in the output file.
+                1. Load skills (tone, banned phrases, approved severity language).
+                2. Fetch the Confluence status template if configured and follow its
+                   sections. If it is not configured, use the output shape below.
+                3. If the payload names a Harness execution, harness_get it to confirm
+                   whether a recent deployment overlaps the incident window. Report this in
+                   the internal draft only.
+                4. Draft the two blocks. Keep the customer block free of internals.
 
-                Output (Slack mrkdwn, ~1800 characters total, no JSON/code fences)
+                Output (Slack mrkdwn, ~1800 characters total, no JSON or code fences)
                 1. *Comms | <incident> | <severity> | <service>*
-                2. *Internal* paragraph (what, impact, next update time)
-                3. *Customer* paragraph (symptoms, workaround, next update; no internals)
+                2. *Internal* paragraph: what is happening, impact, deployment context,
+                   next update time
+                3. *Customer* paragraph: symptoms, workaround if the payload gives one,
+                   next update time, no internals
                 4. *Do not send yet:* any missing evidence that would make the customer
                    draft speculative
-              PLUGIN_MAX_TURNS: "80"
+              PLUGIN_MAX_TURNS: "60"
               PLUGIN_OUTPUT_FILE: /harness/.agent/output/summary.md
               PLUGIN_HARNESS_CONNECTOR: ${{inputs.llmConnector.id}}
               ANTHROPIC_MODEL: ${{inputs.modelName}}
-              PLUGIN_ALLOWED_TOOLS: mcp__grafana__*,mcp__pagerduty__*,mcp__Atlassian_MCP__searchConfluenceUsingCql,mcp__Atlassian_MCP__getConfluencePage,mcp__Atlassian_MCP__searchJiraIssuesUsingJql,mcp__Atlassian_MCP__getJiraIssue,ToolSearch,Skill,Read,Write,Bash
-              PLUGIN_ALLOWED_DOMAINS: monitoring.example.com,api.pagerduty.com,registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org
+              PLUGIN_ALLOWED_TOOLS: mcp__harness__harness_list,mcp__harness__harness_get,mcp__harness__harness_search,mcp__*__searchConfluence,mcp__*__getConfluenceContent,mcp__*__searchJiraIssuesUsingJql,mcp__*__getJiraIssue,mcp__*__getAccessibleAtlassianResources,mcp__*__atlassianUserInfo,mcp__*__executeRead,mcp__*__search,mcp__*__discover,ToolSearch,Skill,Read,Write,Bash
+              PLUGIN_ALLOWED_DOMAINS: registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org
               PLUGIN_MCP_SERVERS_FILE: /harness/.agent/mcp-servers.json
               PLUGIN_MCP_FORMAT: harness
               PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>
               PLUGIN_HARNESS_PLUGINS: /harness/.agent/plugins/team-skills
               HARNESS_AGENT_ALLOW_CWD_PLUGINS: "1"
-              PATH: /harness/.agent-tools/bin:/harness/.agent-tools/google-cloud-sdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+              PATH: /harness/.agent-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   inputs:
     llmConnector:
       type: connector
@@ -245,21 +266,26 @@ agent:
           inputConfig:
             connectorTypes:
               - Mcp
+    status_template:
+      type: string
+    severity:
+      type: string
     agent_request_b64:
       type: string
     team_name:
       type: string
     atlassian_cloud_id:
       type: string
-    status_template:
+    harness_api_key:
       type: string
-    severity:
+    harness_base_url:
       type: string
-    grafana_url:
+      default: https://app.harness.io
+    harness_account_id:
       type: string
-    grafana_token:
+    harness_org:
       type: string
-    pagerduty_api_key:
+    harness_project:
       type: string
     team_skill_git_url:
       type: string

@@ -54,6 +54,7 @@ export function matchCatalog(query: string): MatchResult {
         { text: agent.description.toLowerCase(), weight: 2, label: "description" },
         { text: agent.lifecycle.join(" "), weight: 2, label: "lifecycle" },
         { text: agent.triggers.join(" "), weight: 2, label: "trigger" },
+        { text: (agent.useCases ?? []).join(" "), weight: 3, label: "use case" },
       ]);
       return { agent, score, reasons };
     })
@@ -73,6 +74,7 @@ export function matchCatalog(query: string): MatchResult {
         { text: relatedNames.toLowerCase(), weight: 3, label: "agent" },
         { text: pipeline.lifecycle.join(" "), weight: 2, label: "lifecycle" },
         { text: pipeline.triggers.join(" "), weight: 2, label: "trigger" },
+        { text: (pipeline.useCases ?? []).join(" "), weight: 3, label: "use case" },
         { text: pipeline.stages.join(" ").toLowerCase(), weight: 1, label: "stages" },
       ]);
       return { pipeline, score, reasons };
@@ -101,5 +103,5 @@ export function matchCatalog(query: string): MatchResult {
 export const starterPrompts = [
   "Optimize Dockerfiles so CI layer cache hits more often",
   "Generate documentation from a cloned repository",
-  "Summarize failing tests and post a PR comment",
+  "Remediate CRITICAL container image CVEs in a Dockerfile",
 ];

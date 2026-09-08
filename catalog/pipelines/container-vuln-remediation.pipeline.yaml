@@ -1,0 +1,754 @@
+pipeline:
+  name: Container Vulnerability Remediation
+  identifier: containerVulnRemediation
+  projectIdentifier: "{{projectId}}"
+  orgIdentifier: "{{orgId}}"
+  tags: {}
+  properties:
+    ci:
+      codebase:
+        repoName: <+input>
+        build: <+input>
+  variables:
+    - name: llmConnector
+      type: String
+      description: Account, org, or project LLM connector reference, for example account.YOUR_LLM_CONNECTOR.
+      required: true
+      value: <+input>
+    - name: modelName
+      type: String
+      description: Model identifier your LLM connector exposes.
+      required: true
+      value: <+input>
+    - name: cloudConnector
+      type: String
+      description: Cloud connector used by BuildAndPushECR. The sample keeps PLUGIN_NO_PUSH=true so the image stays local for Trivy.
+      required: true
+      value: <+input>
+    - name: awsRegion
+      type: String
+      required: true
+      value: <+input>.default(us-east-1)
+    - name: awsAccountId
+      type: String
+      description: AWS account id for the ECR image name. Not used to push when PLUGIN_NO_PUSH is true.
+      required: true
+      value: <+input>
+    - name: imageName
+      type: String
+      description: Image repository name, for example my-service.
+      required: true
+      value: <+input>.default(my-service)
+    - name: dockerfile
+      type: String
+      description: Path to the Dockerfile inside the cloned repo.
+      required: true
+      value: <+input>.default(Dockerfile)
+    - name: dockerContext
+      type: String
+      description: Docker build context directory.
+      required: true
+      value: <+input>.default(.)
+    - name: harness_api_key_secret
+      type: String
+      description: Expression that resolves to a Harness API key or PAT, for example <+secrets.getValue("harness_pat")>.
+      required: true
+      value: <+input>
+    - name: harness_base_url
+      type: String
+      required: true
+      value: <+input>.default(https://app.harness.io)
+    - name: gitUserEmail
+      type: String
+      required: true
+      value: <+input>.default(ci-bot@example.com)
+    - name: gitUserName
+      type: String
+      required: true
+      value: <+input>.default(Harness CI)
+    - name: repoOwner
+      type: String
+      description: GitHub org or user that owns the repository. Used only when opening a pull request.
+      required: true
+      value: <+input>
+    - name: repoName
+      type: String
+      description: GitHub repository name. Used only when opening a pull request.
+      required: true
+      value: <+input>
+    - name: scm_token_secret
+      type: String
+      description: Expression that resolves to a GitHub token with pull-request permission, for example <+secrets.getValue("YOUR_SCM_TOKEN_SECRET")>.
+      required: true
+      value: <+input>
+  stages:
+    - stage:
+        name: Build
+        identifier: Build
+        type: CI
+        spec:
+          cloneCodebase: true
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec:
+              size: medium
+          sharedPaths:
+            - /shared/scan_results
+          execution:
+            steps:
+              - stepGroup:
+                  name: Build Image
+                  identifier: build_push_ecr
+                  steps:
+                    - step:
+                        type: BuildAndPushECR
+                        name: Build Local Image
+                        identifier: build_local_image
+                        spec:
+                          connectorRef: <+pipeline.variables.cloudConnector>
+                          region: <+pipeline.variables.awsRegion>
+                          account: <+pipeline.variables.awsAccountId>
+                          imageName: <+pipeline.variables.imageName>
+                          tags:
+                            - <+pipeline.sequenceId>
+                          caching: true
+                          dockerfile: <+pipeline.variables.dockerfile>
+                          context: <+pipeline.variables.dockerContext>
+                          envVariables:
+                            PLUGIN_TAR_PATH: /harness/image.tar
+                            PLUGIN_NO_PUSH: "true"
+                            PLUGIN_BUILDX_LOAD: "true"
+              - stepGroup:
+                  name: Security Container
+                  identifier: security_container
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsFailure
+                  steps:
+                    - step:
+                        type: Run
+                        name: Trivy JSON Scan
+                        identifier: trivy_scan_json
+                        spec:
+                          image: aquasec/trivy:latest
+                          shell: Sh
+                          command: |
+                            mkdir -p /shared/scan_results
+                            trivy image --input /harness/image.tar \
+                              --format json \
+                              --output /shared/scan_results/trivy-results.json \
+                              --severity CRITICAL,HIGH \
+                              --ignore-unfixed \
+                              || true
+                            echo "Trivy JSON saved to /shared/scan_results/trivy-results.json"
+                          privileged: true
+                    - step:
+                        type: AquaTrivy
+                        name: Trivy Orchestration Scan
+                        identifier: trivy_scan
+                        spec:
+                          mode: orchestration
+                          config: default
+                          target:
+                            type: container
+                            workspace: /harness/image.tar
+                            name: <+pipeline.variables.imageName>
+                            variant: <+pipeline.sequenceId>
+                          advanced:
+                            log:
+                              level: info
+                            fail_on_severity: high
+                          privileged: true
+                          image:
+                            type: local_archive
+                            tag: <+pipeline.sequenceId>
+                            name: <+pipeline.variables.imageName>
+                          sbom:
+                            generate: true
+                            format: spdx-json
+              - parallel:
+                  - step:
+                      type: Run
+                      name: Build Manifest
+                      identifier: build_manifest
+                      spec:
+                        shell: Sh
+                        command: |
+                          echo "{\"pipeline\":\"<+pipeline.identifier>\",\"build\":\"<+pipeline.sequenceId>\",\"commit\":\"<+codebase.commitSha>\",\"branch\":\"<+codebase.branch>\",\"imageTag\":\"<+pipeline.sequenceId>\"}"
+                  - stepGroup:
+                      name: Remediation Steps
+                      identifier: Remediation_Steps
+                      when:
+                        stageStatus: Failure
+                      steps:
+                        - step:
+                            type: Run
+                            name: Fetch STO Vulnerabilities Round 1
+                            identifier: fetch_sto_vulnerabilities
+                            spec:
+                              shell: Sh
+                              command: |-
+                                set -e
+                                mkdir -p /shared/scan_results
+                                ACCOUNT_ID="<+account.identifier>"
+                                ORG_ID="<+org.identifier>"
+                                PROJECT_ID="<+project.identifier>"
+                                EXECUTION_ID="<+pipeline.executionId>"
+                                BASE_URL="<+pipeline.variables.harness_base_url>"
+
+                                RESPONSE=$(curl -sS --url "${BASE_URL}/gateway/sto/api/v2/frontend/pipeline-security/v2/issues?accountId=${ACCOUNT_ID}&orgId=${ORG_ID}&projectId=${PROJECT_ID}&executionId=${EXECUTION_ID}&page=0&pageSize=50&severityCodes=Critical%2CHigh&includeExempted=false&isRemediationAgentTab=false" \
+                                  -H "accept: application/json" \
+                                  -H "content-type: application/json" \
+                                  -H "x-api-key: ${HARNESS_API_TOKEN}" \
+                                  -H "harness-account: ${ACCOUNT_ID}")
+
+                                echo "$RESPONSE" > /shared/scan_results/sto-issues-round1.json
+
+                                SCAN_ID=$(echo "$RESPONSE" | grep -o '"scanId":"[^"]*"' | head -1 | sed 's/"scanId":"//g' | sed 's/"//g')
+                                ISSUE_IDS=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | sed 's/"id":"//g' | sed 's/"//g' | tr '\n' ',' | sed 's/,$//')
+                                CRITICAL_COUNT=$(echo "$RESPONSE" | grep -o '"severityCode":"Critical"' | wc -l | tr -d ' ')
+                                HIGH_COUNT=$(echo "$RESPONSE" | grep -o '"severityCode":"High"' | wc -l | tr -d ' ')
+                                ISSUES=$(echo "$RESPONSE" | grep -o '"title":"[^"]*"' | sed 's/"title":"//g' | sed 's/"$//g' | head -20 | tr '\n' ' | ' | sed 's/ | $//')
+
+                                echo "SCAN_ID=$SCAN_ID" >> $HARNESS_OUTPUT_FILE
+                                echo "ISSUE_IDS=$ISSUE_IDS" >> $HARNESS_OUTPUT_FILE
+                                echo "INITIAL_CRITICAL=$CRITICAL_COUNT" >> $HARNESS_OUTPUT_FILE
+                                echo "INITIAL_HIGH=$HIGH_COUNT" >> $HARNESS_OUTPUT_FILE
+
+                                if [ -z "$ISSUES" ]; then
+                                  REMEDIATION_DETAILS="No critical or high vulnerabilities found in STO scan."
+                                else
+                                  REMEDIATION_DETAILS="STO found ${CRITICAL_COUNT} Critical and ${HIGH_COUNT} High vulnerabilities. Issues: ${ISSUES}"
+                                fi
+                                echo "REMEDIATION_DETAILS=$REMEDIATION_DETAILS" >> $HARNESS_OUTPUT_FILE
+                              envVariables:
+                                HARNESS_API_TOKEN: <+pipeline.variables.harness_api_key_secret>
+                              outputVariables:
+                                - name: REMEDIATION_DETAILS
+                                  type: String
+                                  value: REMEDIATION_DETAILS
+                                - name: SCAN_ID
+                                  type: String
+                                  value: SCAN_ID
+                                - name: ISSUE_IDS
+                                  type: String
+                                  value: ISSUE_IDS
+                                - name: INITIAL_CRITICAL
+                                  type: String
+                                  value: INITIAL_CRITICAL
+                                - name: INITIAL_HIGH
+                                  type: String
+                                  value: INITIAL_HIGH
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Run
+                            name: Fetch Vulnerability Details Round 1
+                            identifier: fetch_vulnerability_details
+                            spec:
+                              image: alpine:latest
+                              shell: Sh
+                              command: |-
+                                apk add --no-cache curl jq
+                                ACCOUNT_ID="<+account.identifier>"
+                                ORG_ID="<+org.identifier>"
+                                PROJECT_ID="<+project.identifier>"
+                                SCAN_ID="<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities.output.outputVariables.SCAN_ID>"
+                                ISSUE_IDS="<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities.output.outputVariables.ISSUE_IDS>"
+                                BASE_URL="<+pipeline.variables.harness_base_url>"
+                                mkdir -p /shared/scan_results
+                                JSON_REPORT="/shared/scan_results/remediation_report_round1.json"
+                                echo '[]' > "$JSON_REPORT"
+                                VULN_COUNT=0
+                                CRITICAL_COUNT=0
+                                HIGH_COUNT=0
+                                for ISSUE_ID in $(echo "$ISSUE_IDS" | tr ',' ' '); do
+                                  [ -z "$ISSUE_ID" ] && continue
+                                  DETAIL_RESPONSE=$(curl -sS --url "${BASE_URL}/gateway/sto/api/v2/scans/${SCAN_ID}/issue/${ISSUE_ID}?accountId=${ACCOUNT_ID}&orgId=${ORG_ID}&projectId=${PROJECT_ID}&page=0&pageSize=20" \
+                                    -H "accept: application/json" \
+                                    -H "content-type: application/json" \
+                                    -H "x-api-key: ${HARNESS_API_TOKEN}" \
+                                    -H "harness-account: ${ACCOUNT_ID}")
+                                  SIMPLIFIED=$(echo "$DETAIL_RESPONSE" | jq -c '{
+                                    cve: .title,
+                                    severity: .severityCode,
+                                    library: .details.libraryName,
+                                    current: .details.currentVersion,
+                                    fixed: .details.upgradeVersion,
+                                    remediation: .details.remediationSteps
+                                  }')
+                                  CURRENT_JSON=$(cat "$JSON_REPORT")
+                                  echo "$CURRENT_JSON" | jq --argjson item "$SIMPLIFIED" '. + [$item]' > "$JSON_REPORT"
+                                  SEVERITY=$(echo "$DETAIL_RESPONSE" | jq -r '.severityCode // "Unknown"')
+                                  if [ "$SEVERITY" = "Critical" ]; then CRITICAL_COUNT=$((CRITICAL_COUNT + 1)); fi
+                                  if [ "$SEVERITY" = "High" ]; then HIGH_COUNT=$((HIGH_COUNT + 1)); fi
+                                  VULN_COUNT=$((VULN_COUNT + 1))
+                                done
+                                echo "VULN_COUNT=$VULN_COUNT" >> $HARNESS_OUTPUT_FILE
+                                echo "CRITICAL_COUNT=$CRITICAL_COUNT" >> $HARNESS_OUTPUT_FILE
+                                echo "HIGH_COUNT=$HIGH_COUNT" >> $HARNESS_OUTPUT_FILE
+                                echo "JSON_REPORT=$JSON_REPORT" >> $HARNESS_OUTPUT_FILE
+                              envVariables:
+                                HARNESS_API_TOKEN: <+pipeline.variables.harness_api_key_secret>
+                              outputVariables:
+                                - name: VULN_COUNT
+                                  type: String
+                                  value: VULN_COUNT
+                                - name: CRITICAL_COUNT
+                                  type: String
+                                  value: CRITICAL_COUNT
+                                - name: HIGH_COUNT
+                                  type: String
+                                  value: HIGH_COUNT
+                                - name: JSON_REPORT
+                                  type: String
+                                  value: JSON_REPORT
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Agent
+                            name: Remediation Agent Round 1
+                            identifier: Agent_1
+                            spec:
+                              agentName: ca_container_vuln_remediation
+                              agentSettings:
+                                llmConnector: <+pipeline.variables.llmConnector>
+                                modelName: <+pipeline.variables.modelName>
+                                remediationDetails: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities.output.outputVariables.REMEDIATION_DETAILS>
+                                remediationReport: <+execution.steps.Remediation_Steps.steps.fetch_vulnerability_details.output.outputVariables.JSON_REPORT>
+                        - step:
+                            type: Run
+                            name: Show Dockerfile After Round 1
+                            identifier: Show_Dockerfile_Fixed
+                            spec:
+                              shell: Sh
+                              command: |
+                                echo "=== Dockerfile after Round 1 remediation ==="
+                                cat <+pipeline.variables.dockerfile>
+                        - step:
+                            type: BuildAndPushECR
+                            name: Rebuild Image Round 1
+                            identifier: rebuild_image_round_1
+                            spec:
+                              connectorRef: <+pipeline.variables.cloudConnector>
+                              region: <+pipeline.variables.awsRegion>
+                              account: <+pipeline.variables.awsAccountId>
+                              imageName: <+pipeline.variables.imageName>
+                              tags:
+                                - <+pipeline.sequenceId>
+                              caching: true
+                              dockerfile: <+pipeline.variables.dockerfile>
+                              context: <+pipeline.variables.dockerContext>
+                              envVariables:
+                                PLUGIN_TAR_PATH: /harness/image.tar
+                                PLUGIN_NO_PUSH: "true"
+                                PLUGIN_BUILDX_LOAD: "true"
+                        - step:
+                            type: AquaTrivy
+                            name: Rescan After Round 1
+                            identifier: trivy_scan_fixed
+                            spec:
+                              mode: orchestration
+                              config: default
+                              target:
+                                type: container
+                                workspace: /harness/image.tar
+                                name: <+pipeline.variables.imageName>
+                                variant: <+pipeline.sequenceId>-r1
+                              advanced:
+                                log:
+                                  level: info
+                                fail_on_severity: high
+                              privileged: true
+                              image:
+                                type: local_archive
+                                tag: <+pipeline.sequenceId>
+                                name: <+pipeline.variables.imageName>
+                              sbom:
+                                generate: true
+                                format: spdx-json
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Run
+                            name: Fetch STO Vulnerabilities Round 2
+                            identifier: fetch_sto_vulnerabilities_round2
+                            spec:
+                              shell: Sh
+                              command: |-
+                                ACCOUNT_ID="<+account.identifier>"
+                                ORG_ID="<+org.identifier>"
+                                PROJECT_ID="<+project.identifier>"
+                                EXECUTION_ID="<+pipeline.executionId>"
+                                BASE_URL="<+pipeline.variables.harness_base_url>"
+                                sleep 5
+                                RESPONSE=$(curl -sS --url "${BASE_URL}/gateway/sto/api/v2/frontend/pipeline-security/v2/issues?accountId=${ACCOUNT_ID}&orgId=${ORG_ID}&projectId=${PROJECT_ID}&executionId=${EXECUTION_ID}&page=0&pageSize=50&stages=Build&steps=Build.Remediation_Steps_trivy_scan_fixed&severityCodes=Critical%2CHigh&includeExempted=false&isRemediationAgentTab=false" \
+                                  -H "accept: application/json" \
+                                  -H "content-type: application/json" \
+                                  -H "x-api-key: ${HARNESS_API_TOKEN}" \
+                                  -H "harness-account: ${ACCOUNT_ID}")
+                                echo "$RESPONSE" > /shared/scan_results/sto-issues-round2.json
+                                SCAN_ID_R2=$(echo "$RESPONSE" | grep -o '"scanId":"[^"]*"' | head -1 | sed 's/"scanId":"//g' | sed 's/"//g')
+                                ISSUE_IDS_R2=$(echo "$RESPONSE" | grep -o '"id":"[^"]*"' | sed 's/"id":"//g' | sed 's/"//g' | tr '\n' ',' | sed 's/,$//')
+                                ROUND2_CRITICAL=$(echo "$RESPONSE" | grep -o '"severityCode":"Critical"' | wc -l | tr -d ' ')
+                                ROUND2_HIGH=$(echo "$RESPONSE" | grep -o '"severityCode":"High"' | wc -l | tr -d ' ')
+                                ISSUES=$(echo "$RESPONSE" | grep -o '"title":"[^"]*"' | sed 's/"title":"//g' | sed 's/"$//g' | head -20 | tr '\n' ' | ' | sed 's/ | $//')
+                                echo "SCAN_ID_R2=$SCAN_ID_R2" >> $HARNESS_OUTPUT_FILE
+                                echo "ISSUE_IDS_R2=$ISSUE_IDS_R2" >> $HARNESS_OUTPUT_FILE
+                                echo "ROUND2_CRITICAL=$ROUND2_CRITICAL" >> $HARNESS_OUTPUT_FILE
+                                echo "ROUND2_HIGH=$ROUND2_HIGH" >> $HARNESS_OUTPUT_FILE
+                                if [ -z "$ISSUES" ] || { [ "$ROUND2_CRITICAL" -eq 0 ] && [ "$ROUND2_HIGH" -eq 0 ]; }; then
+                                  REMEDIATION_DETAILS_R2="All critical and high vulnerabilities resolved after Round 1 remediation."
+                                  NEEDS_ROUND2="false"
+                                else
+                                  REMEDIATION_DETAILS_R2="After Round 1: still ${ROUND2_CRITICAL} Critical and ${ROUND2_HIGH} High. Remaining: ${ISSUES}"
+                                  NEEDS_ROUND2="true"
+                                fi
+                                echo "NEEDS_ROUND2=$NEEDS_ROUND2" >> $HARNESS_OUTPUT_FILE
+                                echo "REMEDIATION_DETAILS_R2=$REMEDIATION_DETAILS_R2" >> $HARNESS_OUTPUT_FILE
+                              envVariables:
+                                HARNESS_API_TOKEN: <+pipeline.variables.harness_api_key_secret>
+                              outputVariables:
+                                - name: SCAN_ID_R2
+                                  type: String
+                                  value: SCAN_ID_R2
+                                - name: ISSUE_IDS_R2
+                                  type: String
+                                  value: ISSUE_IDS_R2
+                                - name: ROUND2_CRITICAL
+                                  type: String
+                                  value: ROUND2_CRITICAL
+                                - name: ROUND2_HIGH
+                                  type: String
+                                  value: ROUND2_HIGH
+                                - name: REMEDIATION_DETAILS_R2
+                                  type: String
+                                  value: REMEDIATION_DETAILS_R2
+                                - name: NEEDS_ROUND2
+                                  type: String
+                                  value: NEEDS_ROUND2
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Run
+                            name: Fetch Vulnerability Details Round 2
+                            identifier: fetch_vulnerability_details_round2
+                            spec:
+                              image: alpine:latest
+                              shell: Sh
+                              command: |-
+                                apk add --no-cache curl jq
+                                NEEDS_ROUND2="<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.NEEDS_ROUND2>"
+                                JSON_REPORT="/shared/scan_results/remediation_report_round2.json"
+                                mkdir -p /shared/scan_results
+                                echo '[]' > "$JSON_REPORT"
+                                if [ "$NEEDS_ROUND2" != "true" ]; then
+                                  echo "VULN_COUNT_R2=0" >> $HARNESS_OUTPUT_FILE
+                                  echo "CRITICAL_COUNT_R2=0" >> $HARNESS_OUTPUT_FILE
+                                  echo "HIGH_COUNT_R2=0" >> $HARNESS_OUTPUT_FILE
+                                  echo "JSON_REPORT_R2=$JSON_REPORT" >> $HARNESS_OUTPUT_FILE
+                                  exit 0
+                                fi
+                                ACCOUNT_ID="<+account.identifier>"
+                                ORG_ID="<+org.identifier>"
+                                PROJECT_ID="<+project.identifier>"
+                                SCAN_ID="<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.SCAN_ID_R2>"
+                                ISSUE_IDS="<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.ISSUE_IDS_R2>"
+                                BASE_URL="<+pipeline.variables.harness_base_url>"
+                                VULN_COUNT=0
+                                CRITICAL_COUNT=0
+                                HIGH_COUNT=0
+                                for ISSUE_ID in $(echo "$ISSUE_IDS" | tr ',' ' '); do
+                                  [ -z "$ISSUE_ID" ] && continue
+                                  DETAIL_RESPONSE=$(curl -sS --url "${BASE_URL}/gateway/sto/api/v2/scans/${SCAN_ID}/issue/${ISSUE_ID}?accountId=${ACCOUNT_ID}&orgId=${ORG_ID}&projectId=${PROJECT_ID}&page=0&pageSize=20" \
+                                    -H "accept: application/json" \
+                                    -H "content-type: application/json" \
+                                    -H "x-api-key: ${HARNESS_API_TOKEN}" \
+                                    -H "harness-account: ${ACCOUNT_ID}")
+                                  SIMPLIFIED=$(echo "$DETAIL_RESPONSE" | jq -c '{
+                                    cve: .title,
+                                    severity: .severityCode,
+                                    library: .details.libraryName,
+                                    current: .details.currentVersion,
+                                    fixed: .details.upgradeVersion,
+                                    remediation: .details.remediationSteps
+                                  }')
+                                  CURRENT_JSON=$(cat "$JSON_REPORT")
+                                  echo "$CURRENT_JSON" | jq --argjson item "$SIMPLIFIED" '. + [$item]' > "$JSON_REPORT"
+                                  SEVERITY=$(echo "$DETAIL_RESPONSE" | jq -r '.severityCode // "Unknown"')
+                                  if [ "$SEVERITY" = "Critical" ]; then CRITICAL_COUNT=$((CRITICAL_COUNT + 1)); fi
+                                  if [ "$SEVERITY" = "High" ]; then HIGH_COUNT=$((HIGH_COUNT + 1)); fi
+                                  VULN_COUNT=$((VULN_COUNT + 1))
+                                done
+                                echo "VULN_COUNT_R2=$VULN_COUNT" >> $HARNESS_OUTPUT_FILE
+                                echo "CRITICAL_COUNT_R2=$CRITICAL_COUNT" >> $HARNESS_OUTPUT_FILE
+                                echo "HIGH_COUNT_R2=$HIGH_COUNT" >> $HARNESS_OUTPUT_FILE
+                                echo "JSON_REPORT_R2=$JSON_REPORT" >> $HARNESS_OUTPUT_FILE
+                              envVariables:
+                                HARNESS_API_TOKEN: <+pipeline.variables.harness_api_key_secret>
+                              outputVariables:
+                                - name: VULN_COUNT_R2
+                                  type: String
+                                  value: VULN_COUNT_R2
+                                - name: CRITICAL_COUNT_R2
+                                  type: String
+                                  value: CRITICAL_COUNT_R2
+                                - name: HIGH_COUNT_R2
+                                  type: String
+                                  value: HIGH_COUNT_R2
+                                - name: JSON_REPORT_R2
+                                  type: String
+                                  value: JSON_REPORT_R2
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Agent
+                            name: Remediation Agent Round 2
+                            identifier: Agent_2
+                            spec:
+                              agentName: ca_container_vuln_remediation
+                              agentSettings:
+                                llmConnector: <+pipeline.variables.llmConnector>
+                                modelName: <+pipeline.variables.modelName>
+                                remediationDetails: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.REMEDIATION_DETAILS_R2>
+                                remediationReport: <+execution.steps.Remediation_Steps.steps.fetch_vulnerability_details_round2.output.outputVariables.JSON_REPORT_R2>
+                                previousAttempts: Round 1 reduced vulnerabilities from <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities.output.outputVariables.INITIAL_CRITICAL> Critical/<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities.output.outputVariables.INITIAL_HIGH> High to <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.ROUND2_CRITICAL> Critical/<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.ROUND2_HIGH> High. Fix remaining issues without repeating a failed strategy.
+                            when:
+                              stageStatus: Failure
+                              condition: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.NEEDS_ROUND2> == "true"
+                        - step:
+                            type: BuildAndPushECR
+                            name: Rebuild Image Round 2
+                            identifier: rebuild_image_round_2
+                            spec:
+                              connectorRef: <+pipeline.variables.cloudConnector>
+                              region: <+pipeline.variables.awsRegion>
+                              account: <+pipeline.variables.awsAccountId>
+                              imageName: <+pipeline.variables.imageName>
+                              tags:
+                                - <+pipeline.sequenceId>
+                              caching: true
+                              dockerfile: <+pipeline.variables.dockerfile>
+                              context: <+pipeline.variables.dockerContext>
+                              envVariables:
+                                PLUGIN_TAR_PATH: /harness/image.tar
+                                PLUGIN_NO_PUSH: "true"
+                                PLUGIN_BUILDX_LOAD: "true"
+                            when:
+                              stageStatus: Failure
+                              condition: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.NEEDS_ROUND2> == "true"
+                        - step:
+                            type: AquaTrivy
+                            name: Rescan After Round 2
+                            identifier: trivy_scan_fixed_two
+                            spec:
+                              mode: orchestration
+                              config: default
+                              target:
+                                type: container
+                                workspace: /harness/image.tar
+                                name: <+pipeline.variables.imageName>
+                                variant: <+pipeline.sequenceId>-r2
+                              advanced:
+                                log:
+                                  level: info
+                                fail_on_severity: high
+                              privileged: true
+                              image:
+                                type: local_archive
+                                tag: <+pipeline.sequenceId>
+                                name: <+pipeline.variables.imageName>
+                              sbom:
+                                generate: true
+                                format: spdx-json
+                            when:
+                              stageStatus: Failure
+                              condition: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.NEEDS_ROUND2> == "true"
+                            failureStrategies:
+                              - onFailure:
+                                  errors:
+                                    - AllErrors
+                                  action:
+                                    type: Ignore
+                        - step:
+                            type: Run
+                            name: Fetch Final STO Results
+                            identifier: fetch_sto_vulnerabilities_round3
+                            spec:
+                              shell: Sh
+                              command: |-
+                                NEEDS_ROUND2="<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.NEEDS_ROUND2>"
+                                if [ "$NEEDS_ROUND2" != "true" ]; then
+                                  FINAL_CRITICAL="<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.ROUND2_CRITICAL>"
+                                  FINAL_HIGH="<+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.ROUND2_HIGH>"
+                                  REMEDIATION_DETAILS_FINAL="Round 2 was not needed. Remaining Critical/High counts are from the Round 1 rescan."
+                                  echo "FINAL_CRITICAL=$FINAL_CRITICAL" >> $HARNESS_OUTPUT_FILE
+                                  echo "FINAL_HIGH=$FINAL_HIGH" >> $HARNESS_OUTPUT_FILE
+                                  echo "REMEDIATION_DETAILS_FINAL=$REMEDIATION_DETAILS_FINAL" >> $HARNESS_OUTPUT_FILE
+                                  exit 0
+                                fi
+                                ACCOUNT_ID="<+account.identifier>"
+                                ORG_ID="<+org.identifier>"
+                                PROJECT_ID="<+project.identifier>"
+                                EXECUTION_ID="<+pipeline.executionId>"
+                                BASE_URL="<+pipeline.variables.harness_base_url>"
+                                sleep 5
+                                RESPONSE=$(curl -sS --url "${BASE_URL}/gateway/sto/api/v2/frontend/pipeline-security/v2/issues?accountId=${ACCOUNT_ID}&orgId=${ORG_ID}&projectId=${PROJECT_ID}&executionId=${EXECUTION_ID}&page=0&pageSize=50&stages=Build&steps=Build.Remediation_Steps_trivy_scan_fixed_two&severityCodes=Critical%2CHigh&includeExempted=false&isRemediationAgentTab=false" \
+                                  -H "accept: application/json" \
+                                  -H "content-type: application/json" \
+                                  -H "x-api-key: ${HARNESS_API_TOKEN}" \
+                                  -H "harness-account: ${ACCOUNT_ID}")
+                                echo "$RESPONSE" > /shared/scan_results/sto-issues-round3.json
+                                FINAL_CRITICAL=$(echo "$RESPONSE" | grep -o '"severityCode":"Critical"' | wc -l | tr -d ' ')
+                                FINAL_HIGH=$(echo "$RESPONSE" | grep -o '"severityCode":"High"' | wc -l | tr -d ' ')
+                                ISSUES=$(echo "$RESPONSE" | grep -o '"title":"[^"]*"' | sed 's/"title":"//g' | sed 's/"$//g' | head -20 | tr '\n' ' | ' | sed 's/ | $//')
+                                echo "FINAL_CRITICAL=$FINAL_CRITICAL" >> $HARNESS_OUTPUT_FILE
+                                echo "FINAL_HIGH=$FINAL_HIGH" >> $HARNESS_OUTPUT_FILE
+                                if [ -z "$ISSUES" ] || { [ "$FINAL_CRITICAL" -eq 0 ] && [ "$FINAL_HIGH" -eq 0 ]; }; then
+                                  REMEDIATION_DETAILS_FINAL="All critical and high vulnerabilities resolved after 2 rounds of remediation."
+                                else
+                                  REMEDIATION_DETAILS_FINAL="After Round 2: still ${FINAL_CRITICAL} Critical and ${FINAL_HIGH} High. Remaining: ${ISSUES}"
+                                fi
+                                echo "REMEDIATION_DETAILS_FINAL=$REMEDIATION_DETAILS_FINAL" >> $HARNESS_OUTPUT_FILE
+                              envVariables:
+                                HARNESS_API_TOKEN: <+pipeline.variables.harness_api_key_secret>
+                              outputVariables:
+                                - name: FINAL_CRITICAL
+                                  type: String
+                                  value: FINAL_CRITICAL
+                                - name: FINAL_HIGH
+                                  type: String
+                                  value: FINAL_HIGH
+                                - name: REMEDIATION_DETAILS_FINAL
+                                  type: String
+                                  value: REMEDIATION_DETAILS_FINAL
+                        - step:
+                            type: Run
+                            name: Commit Dockerfile Fixes
+                            identifier: commit_and_push
+                            spec:
+                              shell: Sh
+                              command: |
+                                set -e
+                                cd /harness
+                                git config user.email "<+pipeline.variables.gitUserEmail>"
+                                git config user.name "<+pipeline.variables.gitUserName>"
+                                git add <+pipeline.variables.dockerfile> .trivyignore || true
+                                if git diff --cached --quiet; then
+                                  echo "No Dockerfile or ignore-file changes to commit."
+                                  echo "VULN_FIX_BRANCH=" >> $HARNESS_OUTPUT_FILE
+                                  exit 0
+                                fi
+                                VULN_FIX_BRANCH="fix/container-vuln-remediation-<+pipeline.sequenceId>"
+                                git checkout -b "$VULN_FIX_BRANCH"
+                                git commit -m "fix: remediate container vulnerabilities - build <+pipeline.sequenceId>
+
+                                Automated vulnerability remediation applied by the catalog Container Vulnerability Remediation agent."
+                                git push origin "$VULN_FIX_BRANCH"
+                                echo "VULN_FIX_BRANCH=$VULN_FIX_BRANCH" >> $HARNESS_OUTPUT_FILE
+                              outputVariables:
+                                - name: VULN_FIX_BRANCH
+                                  type: String
+                                  value: VULN_FIX_BRANCH
+                        - step:
+                            type: Run
+                            name: Create Pull Request
+                            identifier: create_pull_request
+                            spec:
+                              shell: Sh
+                              command: |-
+                                set -e
+                                VULN_FIX_BRANCH="<+execution.steps.Remediation_Steps.steps.commit_and_push.output.outputVariables.VULN_FIX_BRANCH>"
+                                if [ -z "$VULN_FIX_BRANCH" ]; then
+                                  echo "No fix branch was pushed. Skipping pull request."
+                                  echo "PR_URL=" >> $HARNESS_OUTPUT_FILE
+                                  echo "PR_NUMBER=" >> $HARNESS_OUTPUT_FILE
+                                  exit 0
+                                fi
+                                export PR_TITLE="fix: container vulnerability remediation - build <+pipeline.sequenceId>"
+                                export PR_BODY="Automated Dockerfile remediation from Harness pipeline <+pipeline.identifier> build <+pipeline.sequenceId>.
+
+                                Initial: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities.output.outputVariables.REMEDIATION_DETAILS>
+
+                                After round 1: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.REMEDIATION_DETAILS_R2>
+
+                                Final: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round3.output.outputVariables.REMEDIATION_DETAILS_FINAL>"
+                                export VULN_FIX_BRANCH
+                                export BASE_BRANCH="<+codebase.branch>"
+                                export GH_TOKEN
+                                export REPO_OWNER="<+pipeline.variables.repoOwner>"
+                                export REPO_NAME="<+pipeline.variables.repoName>"
+                                export HARNESS_OUTPUT_FILE
+                                python3 << 'PYEOF'
+                                import json, os, re, urllib.error, urllib.request
+
+                                def clean(s):
+                                    return re.sub(r"[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f]", "", s or "")
+
+                                payload = {
+                                    "title": clean(os.environ.get("PR_TITLE", "")),
+                                    "body": clean(os.environ.get("PR_BODY", "")),
+                                    "head": clean(os.environ.get("VULN_FIX_BRANCH", "")),
+                                    "base": clean(os.environ.get("BASE_BRANCH", "")),
+                                }
+                                data = json.dumps(payload).encode("utf-8")
+                                req = urllib.request.Request(
+                                    "https://api.github.com/repos/%s/%s/pulls" % (os.environ["REPO_OWNER"], os.environ["REPO_NAME"]),
+                                    data=data,
+                                    headers={
+                                        "Authorization": "token %s" % os.environ["GH_TOKEN"],
+                                        "Accept": "application/vnd.github.v3+json",
+                                        "Content-Type": "application/json",
+                                    },
+                                    method="POST",
+                                )
+                                try:
+                                    with urllib.request.urlopen(req) as resp:
+                                        result = json.loads(resp.read().decode("utf-8"))
+                                        pr_url = result.get("html_url", "")
+                                        pr_number = str(result.get("number", ""))
+                                        print("Pull request created:", pr_url)
+                                        harness_out = os.environ.get("HARNESS_OUTPUT_FILE", "")
+                                        if harness_out:
+                                            with open(harness_out, "a") as handle:
+                                                handle.write("PR_URL=%s\n" % pr_url)
+                                                handle.write("PR_NUMBER=%s\n" % pr_number)
+                                except urllib.error.HTTPError as error:
+                                    print("Failed to create PR:", error.read().decode("utf-8"))
+                                    raise SystemExit(1)
+                                PYEOF
+                              envVariables:
+                                GH_TOKEN: <+pipeline.variables.scm_token_secret>
+                              outputVariables:
+                                - name: PR_URL
+                                  type: String
+                                  value: PR_URL
+                                - name: PR_NUMBER
+                                  type: String
+                                  value: PR_NUMBER

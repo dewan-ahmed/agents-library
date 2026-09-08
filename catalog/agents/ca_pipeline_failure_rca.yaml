@@ -10,7 +10,7 @@ agent:
             script: |-
               set -euo pipefail
 
-              mkdir -p /harness/.agent-tools/bin /harness/.cache/uv \
+              mkdir -p /harness/.agent-tools/bin \
                        /harness/.agent /harness/.agent/context /harness/.agent/output \
                        /harness/.agent/plugins/team-skills/skills /harness/.agent/secrets
 
@@ -30,31 +30,21 @@ agent:
                   target.write_text("{}")
               PY
 
-              if [ ! -x /harness/.agent-tools/bin/uvx ]; then
-                UVX_PATH="$(command -v uvx || true)"
-                if [ -z "$UVX_PATH" ]; then
-                  echo "uvx is not installed in the harness-ai-agent image" >&2
-                  exit 1
-                fi
-                ln -sf "$UVX_PATH" /harness/.agent-tools/bin/uvx
-              fi
-              /harness/.agent-tools/bin/uvx --version
-              UV_CACHE_DIR=/harness/.cache/uv timeout 120s /harness/.agent-tools/bin/uvx "mcp-grafana" --help
-              UV_CACHE_DIR=/harness/.cache/uv timeout 120s /harness/.agent-tools/bin/uvx "pagerduty-mcp" --help
-
+              # harness-mcp-v2 is a Node package; the agent image does not ship Node.
               if [ ! -x /harness/.agent-tools/bin/npx ]; then
                 python3 - <<'PY'
               import os, tarfile, urllib.request
+
               url = "https://nodejs.org/dist/v20.17.0/node-v20.17.0-linux-x64.tar.xz"
               tarball = "/tmp/node.tar.xz"
               urllib.request.urlretrieve(url, tarball)
               os.makedirs("/harness/.agent-tools/node", exist_ok=True)
-              with tarfile.open(tarball) as t:
-                  t.extractall("/harness/.agent-tools/node")
+              with tarfile.open(tarball) as archive:
+                  archive.extractall("/harness/.agent-tools/node")
               root = next(p for p in os.listdir("/harness/.agent-tools/node") if p.startswith("node-"))
               for exe in ("node", "npm", "npx"):
-                  src = f"/harness/.agent-tools/node/{root}/bin/{exe}"
-                  dst = f"/harness/.agent-tools/bin/{exe}"
+                  src = "/harness/.agent-tools/node/%s/bin/%s" % (root, exe)
+                  dst = "/harness/.agent-tools/bin/%s" % exe
                   if os.path.lexists(dst):
                       os.remove(dst)
                   os.symlink(src, dst)
@@ -62,34 +52,7 @@ agent:
               fi
               /harness/.agent-tools/bin/npx --version
 
-              GCLOUD_DIR="/harness/.agent-tools/google-cloud-sdk"
-              GCLOUD_TARBALL="/tmp/google-cloud-cli-linux-x86_64.tar.gz"
-              if [ ! -x "$GCLOUD_DIR/bin/gcloud" ]; then
-                GCLOUD_TARBALL="$GCLOUD_TARBALL" python3 - <<'PY'
-              import os, urllib.request
-              urllib.request.urlretrieve(
-                  "https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-linux-x86_64.tar.gz",
-                  os.environ["GCLOUD_TARBALL"],
-              )
-              PY
-                tar -xzf "$GCLOUD_TARBALL" -C /harness/.agent-tools
-              fi
-              /harness/.agent-tools/google-cloud-sdk/bin/gcloud --version
-              mkdir -p /harness/.gcp
-              cat > /harness/.gcp/adc.json <<'GCPCREDS'
-              ${{inputs.gcp_credentials_json}}
-              GCPCREDS
-              chmod 0600 /harness/.gcp/adc.json
-              mkdir -p /harness/.agent/secrets
-              cat > /harness/.agent/secrets/grafana_url <<'EOF'
-              ${{inputs.grafana_url}}
-              EOF
-              cat > /harness/.agent/secrets/grafana_token <<'EOF'
-              ${{inputs.grafana_token}}
-              EOF
-              cat > /harness/.agent/secrets/pagerduty_api_key <<'EOF'
-              ${{inputs.pagerduty_api_key}}
-              EOF
+              # Credentials go to files so they are never interpolated into a command line.
               cat > /harness/.agent/secrets/harness_api_key <<'EOF'
               ${{inputs.harness_api_key}}
               EOF
@@ -100,10 +63,10 @@ agent:
               ${{inputs.harness_account_id}}
               EOF
               cat > /harness/.agent/secrets/harness_org <<'EOF'
-              ${{inputs.harness_code_org}}
+              ${{inputs.harness_org}}
               EOF
               cat > /harness/.agent/secrets/harness_project <<'EOF'
-              ${{inputs.harness_code_project}}
+              ${{inputs.harness_project}}
               EOF
               chmod 0600 /harness/.agent/secrets/*
 
@@ -113,49 +76,30 @@ agent:
 
               secrets = Path("/harness/.agent/secrets")
 
-              def secret(name: str) -> str:
+
+              def secret(name):
                   path = secrets / name
-                  if not path.exists():
-                      return ""
-                  return path.read_text().strip()
+                  return path.read_text().strip() if path.exists() else ""
 
-              UVX = "/harness/.agent-tools/bin/uvx"
-              NPX = "/harness/.agent-tools/bin/npx"
-              UV_ENV = {"UV_CACHE_DIR": "/harness/.cache/uv"}
 
-              def stdio_mcp(package: str, env: dict) -> dict:
-                  return {
-                      "type": "stdio",
-                      "command": UVX,
-                      "args": [package],
-                      "env": {**UV_ENV, **env},
-                  }
+              missing = [n for n in ("harness_api_key", "harness_account_id") if not secret(n)]
+              if missing:
+                  raise SystemExit("Missing required Harness credentials: " + ", ".join(missing))
 
               mcp_servers = {
-                  "grafana": stdio_mcp(
-                      "mcp-grafana",
-                      {
-                          "GRAFANA_URL": secret("grafana_url"),
-                          "GRAFANA_SERVICE_ACCOUNT_TOKEN": secret("grafana_token"),
-                      },
-                  ),
-                  "pagerduty": stdio_mcp(
-                      "pagerduty-mcp",
-                      {"PAGERDUTY_USER_API_KEY": secret("pagerduty_api_key")},
-                  ),
-                  "harness_code": {
+                  "harness": {
                       "type": "stdio",
-                      "command": NPX,
+                      "command": "/harness/.agent-tools/bin/npx",
                       "args": ["-y", "harness-mcp-v2@latest"],
                       "env": {
                           "HARNESS_API_KEY": secret("harness_api_key"),
-                          "HARNESS_BASE_URL": secret("harness_base_url"),
+                          "HARNESS_BASE_URL": secret("harness_base_url") or "https://app.harness.io",
                           "HARNESS_ACCOUNT_ID": secret("harness_account_id"),
                           "HARNESS_ORG": secret("harness_org"),
                           "HARNESS_PROJECT": secret("harness_project"),
                           "HARNESS_TOOLSETS": "repositories,pull-requests,pipelines",
                       },
-                  },
+                  }
               }
               path = Path("/harness/.agent/mcp-servers.json")
               path.write_text(json.dumps(mcp_servers, indent=2) + "\n")
@@ -236,15 +180,15 @@ agent:
               image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent-rc:local-mcp-v3
             env:
               PLUGIN_TASK: |
-                You are the **${{inputs.team_name}}** team's on-call agent.
+                You are a pipeline-failure RCA agent for **${{inputs.team_name}}**.
 
-                Investigate only the alert in `/harness/.agent/context/agent-request.json`
+                Investigate only the execution in `/harness/.agent/context/agent-request.json`
                 and write a grounded RCA with the Write tool to
                 `/harness/.agent/output/summary.md`.
 
-                Services and repositories owned by this team: ${{inputs.services}}
-                Atlassian cloudId (required on every Atlassian tool call): ${{inputs.atlassian_cloud_id}}
-
+                Repositories and pipelines owned by this team: ${{inputs.services}}
+                Confluence space for runbooks: ${{inputs.confluence_space}}
+                open_fix_pr: ${{inputs.open_fix_pr}}
                 After reading `/harness/.agent/context/agent-request.json`, load matching
                 team skills with the Skill tool (or Read on
                 `/harness/.agent/plugins/team-skills/skills/<name>/SKILL.md`).
@@ -254,59 +198,50 @@ agent:
                 Never print secrets. If a tool fails once, record the exact error and
                 continue. Do not loop. Do not guess identifiers; name missing evidence.
 
-                Tools:
-                - Grafana mcp__grafana__*, PagerDuty mcp__pagerduty__*, Harness Code
-                  mcp__harness_code__* (toolsets: repositories, pull-requests, pipelines)
-                  from `/harness/.agent/mcp-servers.json`.
-                - Confluence/Jira via the Atlassian MCP connector:
-                  searchConfluenceUsingCql, getConfluencePage, searchJiraIssuesUsingJql,
-                  getJiraIssue. Always pass cloudId from inputs.
-                - gcloud via Bash for Cloud Logging when ADC is present.
-                - Do not post to Slack. The pipeline posts OUTPUT_FILE.
-                - Never mutate PagerDuty, Grafana, Confluence, Jira, or cloud resources.
-                  The only allowed write is a Harness Code PR when the alert is actionable.
+                Confluence and Jira come from an optional Atlassian MCP connector. If those
+                tools are not available, say "Confluence not configured" in the relevant
+                section and continue with Harness evidence only. Do not post to Slack; the
+                pipeline posts the exported summary.
+                Never re-run, retry, or interrupt a pipeline. Never merge.
 
-                Investigation order
-                1. Read the request JSON. Load matching team skills. Fetch the pinned
-                   PagerDuty incident if an id is present. Extract runbook URL, service,
-                   env, window.
-                2. Triage from the runbook FIRST. Use it to interpret the metric and to
-                   choose valid Grafana queries / gcloud log filters.
-                3. Query Grafana and/or gcloud only for remaining gaps. Bounded window:
-                   [incident_start-15m, incident_end+5m]. Confirm the metric crossed the
-                   threshold. Never dump full dashboard JSON.
-                4. Correlate a Harness deploy only when timing makes it a hypothesis.
-                   Inspect the commit diff before claiming causation. Never
-                   trigger/retry/rollback pipelines.
-                5. Actionable = a concrete, minimal, low-risk change in a team-owned
-                   repo with exact files. Then open one PR via Harness MCP (branch
-                   oncall/<short-slug>, do not merge). Otherwise write Actionable: N.
+                Steps
+                1. Load skills. harness_get the execution named in the request. Record the
+                   pipeline, status, and which stage and step failed first.
+                2. Read the failed step's logs or error output. Quote the actual error text.
+                   If you cannot retrieve logs, say so rather than inferring the error.
+                3. Identify the commit or PR behind the execution. Inspect the changed files
+                   with repository/commit/file_content. Cite file paths, not guesses.
+                4. Classify the cause: code-change | flaky-test | infrastructure |
+                   configuration | dependency | unknown. Do not claim a code change caused
+                   the failure unless you inspected a diff that explains the error.
+                5. One narrow searchConfluence query in the configured space for a runbook
+                   covering this pipeline or service. Fetch the top page with
+                   getConfluenceContent and follow it.
+                6. If open_fix_pr is the string true AND the fix is a one-file, low-risk patch
+                   you can name exactly, open branch fix/<short-slug> and one pull request in
+                   a team-owned repo. Otherwise skip and say why.
 
-                Output (Slack mrkdwn, ~1800 characters, no JSON/code fences)
-                1. *<alert> | <env> | <service>*
-                2. *On-call decision:* ACT NOW | MONITOR | NO ACTION + one-sentence why
-                3. *Actionable:* Y|N; if Y include *PR:* <url>
-                4. PD / Grafana / runbook links when available
-                5. *Impact:* active/recovered/unverified + blast radius
-                6. *Probable root cause:* or unknown + exact missing evidence
-                7. *Evidence:* 2-4 verified bullets
-                8. *Confidence:* one line
-                9. *Next step:* one concrete action
-              PLUGIN_MAX_TURNS: "80"
+                Output (Slack mrkdwn, ~1800 characters, no JSON or code fences)
+                1. *RCA | <pipeline> | <stage>/<step>*
+                2. *Cause:* <class> + one sentence
+                3. *Error:* the quoted failure text, trimmed
+                4. *Change:* commit or PR and the files that explain it, or none found
+                5. *Runbook:* page title and link, or not configured
+                6. *Evidence:* 2-4 bullets you actually verified
+                7. *PR:* url or skipped + why
+                8. *Next step:* one concrete human action
+              PLUGIN_MAX_TURNS: "100"
               PLUGIN_OUTPUT_FILE: /harness/.agent/output/summary.md
               PLUGIN_HARNESS_CONNECTOR: ${{inputs.llmConnector.id}}
               ANTHROPIC_MODEL: ${{inputs.modelName}}
-              PLUGIN_ALLOWED_TOOLS: mcp__grafana__*,mcp__pagerduty__*,mcp__harness_code__*,mcp__Atlassian_MCP__searchConfluenceUsingCql,mcp__Atlassian_MCP__getConfluencePage,mcp__Atlassian_MCP__searchJiraIssuesUsingJql,mcp__Atlassian_MCP__getJiraIssue,ToolSearch,Skill,Read,Write,Bash
-              PLUGIN_ALLOWED_DOMAINS: monitoring.example.com,api.pagerduty.com,*.googleapis.com,registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org,git*.harness.io
+              PLUGIN_ALLOWED_TOOLS: mcp__harness__*,mcp__*__searchConfluence,mcp__*__getConfluenceContent,mcp__*__searchJiraIssuesUsingJql,mcp__*__getJiraIssue,mcp__*__getAccessibleAtlassianResources,mcp__*__atlassianUserInfo,mcp__*__executeRead,mcp__*__search,mcp__*__discover,ToolSearch,Skill,Read,Write,Bash
+              PLUGIN_ALLOWED_DOMAINS: registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org
               PLUGIN_MCP_SERVERS_FILE: /harness/.agent/mcp-servers.json
               PLUGIN_MCP_FORMAT: harness
               PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>
               PLUGIN_HARNESS_PLUGINS: /harness/.agent/plugins/team-skills
               HARNESS_AGENT_ALLOW_CWD_PLUGINS: "1"
-              PATH: /harness/.agent-tools/bin:/harness/.agent-tools/google-cloud-sdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-              GOOGLE_APPLICATION_CREDENTIALS: /harness/.gcp/adc.json
-              CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE: /harness/.gcp/adc.json
-              CLOUDSDK_CORE_DISABLE_PROMPTS: "1"
+              PATH: /harness/.agent-tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
   inputs:
     llmConnector:
       type: connector
@@ -330,21 +265,18 @@ agent:
           inputConfig:
             connectorTypes:
               - Mcp
+    services:
+      type: string
+    confluence_space:
+      type: string
+    open_fix_pr:
+      type: string
+      default: "false"
     agent_request_b64:
       type: string
     team_name:
       type: string
-    services:
-      type: string
     atlassian_cloud_id:
-      type: string
-    grafana_url:
-      type: string
-    grafana_token:
-      type: string
-    pagerduty_api_key:
-      type: string
-    gcp_credentials_json:
       type: string
     harness_api_key:
       type: string
@@ -353,9 +285,9 @@ agent:
       default: https://app.harness.io
     harness_account_id:
       type: string
-    harness_code_org:
+    harness_org:
       type: string
-    harness_code_project:
+    harness_project:
       type: string
     team_skill_git_url:
       type: string
