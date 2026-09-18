@@ -9,6 +9,7 @@ import { parse } from "yaml";
 const here = dirname(fileURLToPath(import.meta.url));
 const catalogDir = join(here, "..", "..", "catalog");
 const combosPath = join(catalogDir, "test", "combos.json");
+const AGENT_ACTION = "harnessAI@1.0.0";
 const writeCombos = process.argv.includes("--write-combos");
 const errors = [];
 const warnings = [];
@@ -41,9 +42,19 @@ for (const file of agentFiles) {
   if (!doc) continue;
   agentDocs.set(file.replace(/\.yaml$/, ""), doc);
   if (doc.template) continue;
-  if (doc.version !== 1) errors.push(`agents/${file}: expected version: 1`);
-  if (!doc.agent?.step) errors.push(`agents/${file}: missing agent.step`);
-  if (!doc.agent?.inputs) errors.push(`agents/${file}: missing agent.inputs`);
+  const agent = doc.agent;
+  if (!agent) {
+    errors.push(`agents/${file}: missing agent root`);
+    continue;
+  }
+  if (agent.uses !== AGENT_ACTION) errors.push(`agents/${file}: expected agent.uses: ${AGENT_ACTION}`);
+  if (!agent.with?.prompt) errors.push(`agents/${file}: missing agent.with.prompt`);
+  if (!agent.with?.connector) errors.push(`agents/${file}: missing agent.with.connector`);
+  const mcp = agent.with?.mcp;
+  if (mcp !== undefined && !Array.isArray(mcp)) errors.push(`agents/${file}: agent.with.mcp must be a list`);
+  for (const [key, value] of Object.entries(agent.with?.env ?? {})) {
+    if (typeof value !== "string") errors.push(`agents/${file}: agent.with.env.${key} must be a string`);
+  }
 }
 
 const pipelineFiles = readdirSync(join(catalogDir, "pipelines")).filter((f) => f.endsWith(".pipeline.yaml"));
