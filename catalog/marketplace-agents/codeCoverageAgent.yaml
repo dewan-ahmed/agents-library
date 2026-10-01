@@ -76,7 +76,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are the Harness Code Coverage agent. Your job is to analyze
         the repository, find gaps in test coverage, write meaningful
         unit tests to close those gaps, and commit them to the current
@@ -249,8 +249,8 @@ template:
           resolve it.
         - Never echo or log secret values, tokens, or credentials.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

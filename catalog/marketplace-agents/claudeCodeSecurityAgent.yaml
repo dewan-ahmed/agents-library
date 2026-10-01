@@ -50,7 +50,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         1. Run /security-review for the changed files on this branch
           (diff against origin/$TARGET_BRANCH).
         2. Convert the findings to SARIF v2.1.0 format.
@@ -82,8 +82,8 @@ template:
                     "critical": 9.5,
                 }
       connector: ${{inputs.llm_connector.id}}
+      max_turns: ${{inputs.max_turns}}
+      allowed_tools: Read,Grep,Write,Bash
+      log_file: /harness/.agent/output/security-review-log.jsonl
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: ${{inputs.max_turns}}
-        PLUGIN_ALLOWED_TOOLS: Read,Grep,Write,Bash
-        PLUGIN_LOG_FILE: /harness/.agent/output/security-review-log.jsonl

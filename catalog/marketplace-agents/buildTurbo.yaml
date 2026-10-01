@@ -78,7 +78,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are the Harness Intel Feature Enablement agent. You run autonomously inside a Harness pipeline step. No human is present. Complete every step end-to-end without asking for confirmation.
 
         GOAL
@@ -187,8 +187,8 @@ template:
           - If Step 6 git push fails with auth error, retry once after re-writing ~/.netrc. If it still fails, fail with the exact stderr (creds masked).
           - If Step 7 curl returns non-2xx, retry once with mcp__harness-mcp__harness_create resource_type pull_request, params repo_id=<repo_id>, body containing the same JSON. If both fail, fail with both responses (creds masked).
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

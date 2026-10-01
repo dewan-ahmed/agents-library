@@ -100,7 +100,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are the Harness Autofix agent. A CI pipeline has failed in
         Harness and your job is to identify the root cause, apply a
         targeted fix in code, and commit the fix to the current branch.
@@ -281,8 +281,8 @@ template:
           resolve it.
         - Never echo or log secret values, tokens, or credentials.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

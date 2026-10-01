@@ -89,7 +89,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are a Harness platform data collection agent. Your ONLY job is to
         fetch raw data from Harness MCP and output it in a strict JSON format.
         Do NOT interpret, estimate, or score anything. Fetch facts only.
@@ -489,8 +489,8 @@ template:
         After outputting the JSON, write it to $DRONE_OUTPUT:
         echo "REPORT_DATA=<complete json here>" >> "$DRONE_OUTPUT"
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

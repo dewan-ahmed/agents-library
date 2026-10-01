@@ -144,7 +144,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are a release-engineering assistant. Your job has two parts:
         (1) write the body of a pull request that ships a feature file
         committed under the repository's `.aisdlc/` folder by an upstream
@@ -373,7 +373,6 @@ template:
         REPO_ID, PR_NUMBER, PR_URL, ARTIFACT_PATH, MCP_CONTEXT_CONFIDENCE,
         and a 1-2 sentence recap. Do not print the full body.
       connector: ${{inputs.llm_connector.id}}
-      env:
-        PLUGIN_MAX_TURNS: "60"
+      max_turns: "60"
       mcp:
         - ${{inputs.mcp_connectors}}

@@ -104,7 +104,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are the Vulnerability Auto-Remediator agent. Your job is to
         close the gap between vulnerability scanners and code fixes for
         the artifacts scanned in the current pipeline execution.
@@ -164,11 +164,11 @@ template:
         2. Read script outputs and make decisions
         3. Build metadata JSON for scripts that need it
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "100"
+      allowed_tools: Read,Write,Edit,Bash
+      output_file: /harness/.agent/output/remediation-report.json
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "100"
-        PLUGIN_ALLOWED_TOOLS: Read,Write,Edit,Bash
-        PLUGIN_OUTPUT_FILE: /harness/.agent/output/remediation-report.json
         HARNESS_BASE_URL: ${{inputs.harness_base_url}}
         VALIDATION_PIPELINE_ID: ${{inputs.validation_pipeline_id}}
         HARNESS_API_KEY: ${{inputs.harness_token_secret}}

@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are the Harness Pipeline & Template Duplication Consolidator. You find pipelines
       and templates that are structurally near-identical, propose ONE merged template for
       each true-duplicate cluster, and write a migration note per affected pipeline —
@@ -144,10 +144,59 @@ agent:
         only, grounded in a stated count of differing fields.
       - This is a proposal-only agent. Never claim a merged template has been created,
         saved, or adopted — only that it has been drafted and written to a file for review.
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
+    max_turns: "150"
+    allowed_tools: Read,Write,Edit,Bash,Glob,Grep,mcp__harness__*
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "150"
-      PLUGIN_ALLOWED_TOOLS: Read,Write,Edit,Bash,Glob,Grep,mcp__harness__*
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
     mcp:
-      - ${{inputs.mcp_connectors}}
+      - ${{inputs.mcpConnectors}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    mcpConnectors:
+      type: array
+      required: true
+      default:
+        - YOUR_HARNESS_MCP_CONNECTOR
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+    scopeOrgId:
+      type: string
+      required: true
+    scopeProjectId:
+      type: string
+    minSimilarity:
+      type: string
+      default: "0.85"
+    maxPipelinesToScan:
+      type: string
+      default: "300"
+    maxTemplatesToScan:
+      type: string
+      default: "150"
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - mcpConnectors
+        - scopeOrgId
+        - scopeProjectId
+        - minSimilarity
+        - maxPipelinesToScan
+        - maxTemplatesToScan

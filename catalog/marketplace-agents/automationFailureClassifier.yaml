@@ -61,7 +61,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         ## Test Failure Classification Agent
 
         ### Role and Purpose
@@ -159,8 +159,8 @@ template:
         - No failures: write both files with the "No failures in this category" line.
         - Ambiguous changelog entries ("various fixes", "misc improvements"): treat as non-matches; these are too vague to justify an outdated_test classification.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
         TEST_REPORT_PATH: ${{inputs.test_report_path}}
         CHANGELOG_PATH: ${{inputs.changelog_path}}

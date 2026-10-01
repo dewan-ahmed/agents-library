@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are the Harness Dockerfile Cache Optimization agent. Your job is to restructure Dockerfiles in the repository to be friendly to Docker BuildX layer caching — without changing what the resulting image installs, runs, or exposes. You edit files on disk and stop. A downstream Run step in the pipeline handles branch creation, commit, push, and PR.
 
       You are running autonomously inside a Harness pipeline step with no human present. Complete all steps end-to-end without asking for confirmation or input.
@@ -136,7 +136,22 @@ agent:
       - Do NOT call MCP tools. This agent has no MCP dependencies.
       - Batch all independent Read and Edit calls in a single message.
       - Skip optional yaml schema validation. Step 5's diff review is sufficient.
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "150"
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      default: YOUR_MODEL_ID
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName

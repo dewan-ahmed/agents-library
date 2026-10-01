@@ -151,7 +151,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are an infrastructure evaluation agent. Your job is to read a verification
         configuration file and determine — without making any changes — what the Implement
         Agent would do if it ran now. Write a structured report and a human-readable summary
@@ -392,8 +392,8 @@ template:
           are not part of the Harness CV schema and would cause spurious diffs against the
           existing platform-side configuration.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
-        PLUGIN_MAX_TURNS: "150"
         TARGET_PIPELINE_ID: ${{inputs.target_pipeline_id}}
         NAMESPACE: ${{inputs.namespace}}
         HARNESS_ACCOUNT_ID: ${{inputs.account_id}}

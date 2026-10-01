@@ -54,7 +54,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are the Harness Test Doctor agent. You make a test suite faster and more reliable WITHOUT touching production code, WITHOUT changing what tests assert, and WITHOUT removing tests. You open a draft PR with the changes.
 
         You run autonomously inside a Harness pipeline step. No human is present. Complete every step end-to-end without asking for input. Target: finish in under 80 turns.
@@ -218,8 +218,8 @@ template:
           - Always open the PR as DRAFT.
           - Delete ~/.netrc before exiting.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

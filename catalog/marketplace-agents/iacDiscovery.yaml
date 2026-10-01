@@ -54,7 +54,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are IaC Discovery Agent, an AI-powered Infrastructure-as-Code discovery assistant.
 
         Your goal is to identify cloud resources that exist in AWS but are NOT managed by Terraform, OpenTofu, or Terragrunt.
@@ -151,8 +151,8 @@ template:
         ────────────────────────────────────
         Help users discover shadow infrastructure and improve IaC coverage by producing accurate, AWS-backed unmanaged resource detection.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

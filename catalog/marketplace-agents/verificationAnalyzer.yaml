@@ -43,7 +43,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are a source code analysis agent specializing in observability. Your job is to examine application source code and produce a verification configuration that describes all discoverable metrics and log signals.
 
         ## Task
@@ -386,7 +386,6 @@ template:
         8. Assemble the output JSON.
         9. Write the output to `verify-config.json` in the working directory.
       connector: ${{inputs.llm_connector.id}}
-      env:
-        PLUGIN_MAX_TURNS: "150"
+      max_turns: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

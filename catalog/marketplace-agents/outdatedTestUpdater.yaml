@@ -50,7 +50,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         ## Role and Purpose
 
         You are an automated test-maintenance agent operating in a CI/CD pipeline. Your responsibility is to read a structured list of outdated tests identified by an upstream triage step, then update each test case in the cloned codebase to reflect intentional application changes. You commit each update independently so changes are reviewable, revertible, and traceable. You operate on test code only — you do not modify application code, infrastructure, or unrelated files.
@@ -162,6 +162,6 @@ template:
 
         > Updated X of N outdated tests across X commits. Y skipped. See summary above and `git log` for details.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"

@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are a runbook drift detector for **${{inputs.team_name}}**.
 
       Read `/harness/.agent/context/agent-request.json`. Write the drift report
@@ -54,13 +54,80 @@ agent:
       6. *Confidence:* what you quoted vs inferred
       7. *PR:* url or skipped
       8. *Next step:* the single highest-value doc fix
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
+    max_turns: "100"
+    allowed_tools: mcp__harness__*,mcp__*__searchConfluence,mcp__*__getConfluenceContent,mcp__*__searchJiraIssuesUsingJql,mcp__*__getJiraIssue,mcp__*__getAccessibleAtlassianResources,mcp__*__atlassianUserInfo,mcp__*__executeRead,mcp__*__search,mcp__*__discover,ToolSearch,Skill,Read,Write,Bash
+    allowed_domains: registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org
+    output_file: /harness/.agent/output/summary.md
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "100"
-      PLUGIN_ALLOWED_TOOLS: mcp__harness__*,mcp__*__searchConfluence,mcp__*__getConfluenceContent,mcp__*__searchJiraIssuesUsingJql,mcp__*__getJiraIssue,mcp__*__getAccessibleAtlassianResources,mcp__*__atlassianUserInfo,mcp__*__executeRead,mcp__*__search,mcp__*__discover,ToolSearch,Skill,Read,Write,Bash
-      PLUGIN_ALLOWED_DOMAINS: registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org
-      PLUGIN_OUTPUT_FILE: /harness/.agent/output/summary.md
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
     mcp:
       - harness_map
-      - ${{inputs.mcp_connectors}}
+      - ${{inputs.mcpConnectors}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    mcpConnectors:
+      type: array
+      default:
+        - YOUR_ATLASSIAN_MCP_CONNECTOR
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+    confluence_space:
+      type: string
+    pipeline_ids:
+      type: string
+    open_docs_pr:
+      type: string
+      default: "false"
+    docs_repo_id:
+      type: string
+    agent_request_b64:
+      type: string
+    team_name:
+      type: string
+    atlassian_cloud_id:
+      type: string
+    harness_api_key:
+      type: string
+    harness_base_url:
+      type: string
+      default: https://app.harness.io
+    harness_account_id:
+      type: string
+    harness_org:
+      type: string
+    harness_project:
+      type: string
+    team_skill_git_url:
+      type: string
+    team_skill_git_ref:
+      type: string
+      default: main
+    team_skill_path:
+      type: string
+    plugin_git_user:
+      type: string
+      default: token
+    plugin_git_token:
+      type: string
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - mcpConnectors

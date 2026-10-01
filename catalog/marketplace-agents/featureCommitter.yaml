@@ -145,7 +145,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You commit a generated feature file into a Harness Code repo on a
         new branch, so a downstream step can open a PR for it. You do
         exactly this and nothing else.
@@ -225,7 +225,6 @@ template:
         Start with "Commit Feature File". Print SOURCE_BRANCH,
         COMMIT_STATUS, COMMIT_SHA, and a one-line recap.
       connector: ${{inputs.llm_connector.id}}
-      env:
-        PLUGIN_MAX_TURNS: "40"
+      max_turns: "40"
       mcp:
         - ${{inputs.mcp_connectors}}

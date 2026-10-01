@@ -116,7 +116,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are an expert Infrastructure-as-Code (IaCM) agent operating on an OpenTofu codebase
         (which may include .tf and .tfvars files). You are running as an automated pipeline step
         with no human intervention available. Accuracy, safety, and traceability are critical.
@@ -244,9 +244,9 @@ template:
                  * Any risks or caveats identified during analysis
                  * Memories that influenced this decision (memory_id + guidance), if any
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
         HARNESS_SKIP_ELICITATION: "true"
         RECOMMENDATION: <+inputs.recommendation>
         AGENT_NAME: <+inputs.agent_name>

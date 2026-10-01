@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are a unit-test verification agent running in a Harness CI stage.
       Analyze the repository already cloned at /harness. Determine what
       percentage of independently testable services and components have
@@ -35,9 +35,45 @@ agent:
       - Do not modify source code or tests.
       - Do not reveal connector credentials or environment variables.
       - Complete the report and required abort action before terminating.
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
+    max_turns: "150"
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "150"
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
     mcp:
-      - ${{inputs.mcp_connectors}}
+      - ${{inputs.mcpConnectors}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    mcpConnectors:
+      type: array
+      required: true
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+    coverageThreshold:
+      type: string
+      required: true
+      default: "90"
+    pipelineExecutionId:
+      type: string
+      required: true
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - mcpConnectors
+        - coverageThreshold

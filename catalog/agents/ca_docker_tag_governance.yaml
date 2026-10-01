@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are a Docker Tag Governance Agent. Evaluate retention policies,
       produce storage and cost findings, and—only in auto-delete
       mode—delete eligible tags from Docker Hub.
@@ -55,9 +55,66 @@ agent:
       - If a repository has fewer tags than retainCount, delete nothing.
       - Be explicit about tags that WILL versus WOULD be deleted.
       - Never invent timestamps, sizes, costs, or deletion results.
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
+    max_turns: "200"
+    allowed_domains: ${{inputs.allowedDomains}}
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "200"
-      PLUGIN_ALLOWED_DOMAINS: ${{inputs.allowedDomains}}
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
       DOCKER_HUB_TOKEN: ${{inputs.dockerHubToken}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    allowedDomains:
+      type: string
+      default: "hub\\.docker\\.com|registry\\.hub\\.docker\\.com"
+    dockerRepositories:
+      type: string
+      required: true
+    dockerUsername:
+      type: string
+      required: false
+    dockerHubToken:
+      type: secret
+      required: false
+    cleanupMode:
+      type: string
+      required: true
+      default: report-only
+    retainCount:
+      type: string
+      required: true
+      default: "10"
+    protectedPatterns:
+      type: string
+      required: true
+      default: "latest,prod-*,release-*,v[0-9]*"
+    daysThreshold:
+      type: string
+      required: true
+      default: "30"
+    estimatedCostPerGB:
+      type: string
+      default: "0.50"
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - dockerRepositories
+        - cleanupMode
+        - retainCount
+        - protectedPatterns
+        - daysThreshold
+        - estimatedCostPerGB
+        - dockerUsername
+        - dockerHubToken
+        - allowedDomains

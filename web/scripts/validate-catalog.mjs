@@ -23,6 +23,8 @@ function parseYaml(path) {
   }
 }
 
+const INPUT_REF = /\$\{\{\s*inputs\.([A-Za-z_][\w]*)/g;
+
 function walkAgentNames(node, acc = []) {
   if (Array.isArray(node)) {
     node.forEach((item) => walkAgentNames(item, acc));
@@ -35,25 +37,89 @@ function walkAgentNames(node, acc = []) {
   return acc;
 }
 
+function referencedInputs(raw) {
+  const names = new Set();
+  for (const match of raw.matchAll(INPUT_REF)) names.add(match[1]);
+  return names;
+}
+
+function validateActionShape(label, agent, declared, raw) {
+  if (!agent) {
+    errors.push(`${label}: missing agent`);
+    return;
+  }
+  if (agent.uses !== AGENT_ACTION) errors.push(`${label}: expected uses: ${AGENT_ACTION}`);
+  if (!agent.with?.prompt) errors.push(`${label}: missing with.prompt`);
+  if (!agent.with?.connector) errors.push(`${label}: missing with.connector`);
+  const mcp = agent.with?.mcp;
+  if (mcp !== undefined && !Array.isArray(mcp)) errors.push(`${label}: with.mcp must be a list`);
+  for (const [key, value] of Object.entries(agent.with?.env ?? {})) {
+    if (typeof value !== "string") errors.push(`${label}: with.env.${key} must be a string`);
+    if (key.startsWith("PLUGIN_")) {
+      errors.push(`${label}: ${key} is an action setting and must not live under with.env`);
+    }
+  }
+  if (raw.includes("prompt: |-")) {
+    errors.push(`${label}: prompt uses |- which strips the trailing newline; use |`);
+  }
+  if (!declared || typeof declared !== "object" || Array.isArray(declared)) {
+    errors.push(`${label}: missing input declarations`);
+    return;
+  }
+  const keys = new Set(Object.keys(declared));
+  for (const name of referencedInputs(raw)) {
+    if (!keys.has(name)) errors.push(`${label}: inputs.${name} is referenced but not declared`);
+  }
+}
+
+function walkAgentSettings(node, acc = []) {
+  if (Array.isArray(node)) {
+    node.forEach((item) => walkAgentSettings(item, acc));
+    return acc;
+  }
+  if (!node || typeof node !== "object") return acc;
+  if (typeof node.agentName === "string" && node.agentSettings) {
+    let settings = node.agentSettings;
+    if (typeof settings === "string") {
+      try {
+        settings = JSON.parse(settings);
+      } catch {
+        settings = null;
+      }
+    }
+    if (settings && typeof settings === "object" && !Array.isArray(settings)) {
+      acc.push({ name: node.agentName.split("@")[0], settings });
+    }
+  }
+  Object.values(node).forEach((value) => walkAgentSettings(value, acc));
+  return acc;
+}
+
 const agentFiles = readdirSync(join(catalogDir, "agents")).filter((f) => f.endsWith(".yaml"));
 const agentDocs = new Map();
 for (const file of agentFiles) {
-  const doc = parseYaml(join(catalogDir, "agents", file));
+  const path = join(catalogDir, "agents", file);
+  const raw = readFileSync(path, "utf8");
+  const doc = parseYaml(path);
   if (!doc) continue;
   agentDocs.set(file.replace(/\.yaml$/, ""), doc);
-  if (doc.template) continue;
-  const agent = doc.agent;
-  if (!agent) {
-    errors.push(`agents/${file}: missing agent root`);
-    continue;
-  }
-  if (agent.uses !== AGENT_ACTION) errors.push(`agents/${file}: expected agent.uses: ${AGENT_ACTION}`);
-  if (!agent.with?.prompt) errors.push(`agents/${file}: missing agent.with.prompt`);
-  if (!agent.with?.connector) errors.push(`agents/${file}: missing agent.with.connector`);
-  const mcp = agent.with?.mcp;
-  if (mcp !== undefined && !Array.isArray(mcp)) errors.push(`agents/${file}: agent.with.mcp must be a list`);
-  for (const [key, value] of Object.entries(agent.with?.env ?? {})) {
-    if (typeof value !== "string") errors.push(`agents/${file}: agent.with.env.${key} must be a string`);
+  validateActionShape(`agents/${file}`, doc.agent, doc.agent?.inputs, raw);
+}
+
+const marketplaceDir = join(catalogDir, "marketplace-agents");
+if (existsSync(marketplaceDir)) {
+  for (const file of readdirSync(marketplaceDir).filter((f) => f.endsWith(".yaml"))) {
+    const path = join(marketplaceDir, file);
+    const raw = readFileSync(path, "utf8");
+    const doc = parseYaml(path);
+    if (!doc?.template?.agent) continue;
+    if (doc.template.agent.uses !== AGENT_ACTION) continue;
+    validateActionShape(
+      `marketplace-agents/${file}`,
+      doc.template.agent,
+      doc.template.inputs,
+      raw,
+    );
   }
 }
 
@@ -70,6 +136,16 @@ for (const file of pipelineFiles) {
   if (pipeline.orgIdentifier !== "{{orgId}}") errors.push(`pipelines/${file}: orgIdentifier must be {{orgId}}`);
   if (pipeline.projectIdentifier !== "{{projectId}}") errors.push(`pipelines/${file}: projectIdentifier must be {{projectId}}`);
   pipelineAgentRefs.set(file, walkAgentNames(pipeline));
+  for (const { name, settings } of walkAgentSettings(pipeline)) {
+    const agent = agentDocs.get(name);
+    const declared = agent?.agent?.inputs;
+    if (!declared) continue;
+    for (const key of Object.keys(settings)) {
+      if (!Object.hasOwn(declared, key)) {
+        errors.push(`pipelines/${file}: agentSettings.${key} is not declared on agents/${name}.yaml`);
+      }
+    }
+  }
 }
 
 const catalog = JSON.parse(readFileSync(join(catalogDir, "catalog.json"), "utf8"));

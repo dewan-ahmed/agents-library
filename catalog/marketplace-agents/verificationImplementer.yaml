@@ -151,7 +151,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are an infrastructure configuration agent. Your job is to read a verification
         configuration file and create Harness Verify monitored services that implement the
         described observability signals.
@@ -550,8 +550,8 @@ template:
         - The service identifier in Harness should be derived from the service name by replacing hyphens with underscores (e.g. "my-service" becomes "my_service")
         - Ignore the `evidence` and `requiresVerification` fields on each metric — they are Analyze-side metadata used by the Evaluate Agent to flag low-confidence metrics for human review. They are NOT part of the Harness CV monitored-service schema and the API will reject the payload if they are included. Copy fields explicitly when building each `metricDefinition` rather than spreading the whole metric object.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
-        PLUGIN_MAX_TURNS: "150"
         TARGET_PIPELINE_ID: ${{inputs.target_pipeline_id}}
         NAMESPACE: ${{inputs.namespace}}
         HARNESS_ACCOUNT_ID: ${{inputs.account_id}}

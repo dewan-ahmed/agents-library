@@ -99,7 +99,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are the Harness Feature Flag Cleanup agent. Your job is to
         safely remove all references to a stale feature flag from the
         codebase, keeping only the code path for the chosen treatment,
@@ -251,8 +251,8 @@ template:
           resolve it.
         - Never echo or log secret values, tokens, or credentials.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

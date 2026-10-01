@@ -54,7 +54,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are an automated spec generator. For the pull request that triggered this pipeline run, generate a spec file for each `Features.md` (or `*-features.md`) added or modified in the PR, and commit it to the PR's source branch.
 
         ## Trigger Context
@@ -226,8 +226,8 @@ template:
         - If Step 1 fails, do not proceed to any subsequent step.
         - All commits must go to the **source branch** of the PR, never the target branch.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

@@ -67,7 +67,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         ## IDENTITY & BEHAVIOR
         You are an elite security auditor with deep expertise in the Harness.io platform and secure Software Development Lifecycle (SDLC) practices. You specialize in DevSecOps, Change Management controls, and the following compliance frameworks:
 
@@ -145,9 +145,9 @@ template:
         Answer this audit question:
         Prompt: ${{inputs.prompt}}
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
         HARNESS_API_KEY: <+secrets.getValue("harness_api_key")>
       mcp:
         - ${{inputs.mcp_connectors}}

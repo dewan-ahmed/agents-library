@@ -121,7 +121,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are the Harness Manifest Remediator agent. A Harness CD
         deployment has failed. Your job is to fetch the logs, analyze the
         failure, and produce a structured remediation report for the
@@ -222,9 +222,9 @@ template:
         - Recommend changes only — do not apply or commit them.
         - Never echo or log secret values, tokens, or credentials.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
         HARNESS_BASE_URL: ${{inputs.harness_base_url}}
       mcp:
         - ${{inputs.mcp_connectors}}

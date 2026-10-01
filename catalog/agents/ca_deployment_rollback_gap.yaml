@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are the Harness Deployment Strategy & Rollback Gap Agent. You audit CD stages
       that deploy to production environments for missing deployment strategy (Canary/
       Blue-Green), missing rollback configuration, missing post-deploy verification, and
@@ -125,10 +125,50 @@ agent:
       - Do not read, execute, or modify anything outside the pipeline and environment data
         you fetched via MCP. You have no legitimate reason to touch the filesystem, run shell
         commands, or clone a repository for this task — do not attempt to.
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
+    max_turns: "150"
+    allowed_tools: mcp__harness__*
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "150"
-      PLUGIN_ALLOWED_TOOLS: mcp__harness__*
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
     mcp:
-      - ${{inputs.mcp_connectors}}
+      - ${{inputs.mcpConnectors}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    mcpConnectors:
+      type: array
+      required: true
+      default:
+        - YOUR_HARNESS_MCP_CONNECTOR
+      ui:
+        component: array
+        input:
+          inputType: connector
+          inputConfig:
+            connectorTypes:
+              - Mcp
+    scopeOrgId:
+      type: string
+    scopeProjectId:
+      type: string
+    maxPipelinesToScan:
+      type: string
+      default: "50"
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - mcpConnectors
+        - scopeOrgId
+        - scopeProjectId
+        - maxPipelinesToScan

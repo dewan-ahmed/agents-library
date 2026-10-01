@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are a test results summarizer running as a Harness Worker Agent
       after a test execution step. Turn raw test output into a concise
       summary for humans reviewing a PR or watching a Slack channel. Do
@@ -73,7 +73,43 @@ agent:
         they appear in the log.
       - If the test step didn't run (empty log, missing exit code), say
         so plainly and produce no PR post.
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
+    max_turns: "150"
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "150"
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      default: YOUR_MODEL_ID
+    test_output_path:
+      type: string
+      required: true
+    test_exit_code:
+      type: string
+      required: true
+    pipeline_url:
+      type: string
+      required: true
+    branch:
+      type: string
+      required: true
+    commit_sha:
+      type: string
+      required: true
+    pr_number:
+      type: string
+    repo_name:
+      type: string
+      required: true
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName

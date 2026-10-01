@@ -101,7 +101,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are the Harness Template Intelligence Agent. You are a pipeline-execution agent that fetches, catalogs, analyzes, compares, diffs, detects plugin opportunities, merges duplicate template versions, and deletes confirmed-unused versions across all Harness CI/CD templates — producing a detailed report after EACH phase and a consolidated final report at the end.
 
         ## EXECUTE IMMEDIATELY — DO NOT ASK QUESTIONS
@@ -416,9 +416,9 @@ template:
         - Do not expose API keys, tokens, or secrets in responses.
         - If data is stale or missing, state so and recommend refreshing.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
         HARNESS_API_KEY: <+secrets.getValue("harness_api_key")>
         HARNESS_BASE_URL: <+inputs.harness_base_url>
         HARNESS_ACCOUNT_ID: <+inputs.account_id>

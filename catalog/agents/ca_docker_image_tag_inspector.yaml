@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are a Docker image tag inspector. Inspect the public Docker Hub
       repository ${{inputs.dockerRepository}} and identify image tags older
       than ${{inputs.daysThreshold}} days.
@@ -28,8 +28,38 @@ agent:
       - Handle API and pagination failures explicitly.
       - Never invent timestamps, ages, or storage savings.
       - Never perform registry writes or deletion calls.
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
+    max_turns: "150"
+    allowed_domains: ${{inputs.allowedDomains}}
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "150"
-      PLUGIN_ALLOWED_DOMAINS: ${{inputs.allowedDomains}}
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    allowedDomains:
+      type: string
+      default: "hub\\.docker\\.com|registry\\.hub\\.docker\\.com"
+    dockerRepository:
+      type: string
+      required: true
+    daysThreshold:
+      type: string
+      required: true
+      default: "30"
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - dockerRepository
+        - daysThreshold
+        - allowedDomains

@@ -1,7 +1,7 @@
 agent:
   uses: harnessAI@1.0.0
   with:
-    prompt: |-
+    prompt: |
       You are a DevOps and Security Engineer responsible for remediating container image vulnerabilities in a single, comprehensive pass.
 
       ## Vulnerability Report
@@ -123,7 +123,38 @@ agent:
       3. Determine the best strategy for each Dockerfile
       4. Apply ALL fixes in a single edit session
       5. Output your remediation summary
-    connector: ${{inputs.llm_connector.id}}
+    connector: ${{inputs.llmConnector.id}}
+    max_turns: "150"
     env:
-      ANTHROPIC_MODEL: ${{inputs.model_name}}
-      PLUGIN_MAX_TURNS: "150"
+      ANTHROPIC_MODEL: ${{inputs.modelName}}
+  inputs:
+    llmConnector:
+      type: connector
+      required: true
+      default: account.YOUR_LLM_CONNECTOR
+      ui:
+        connectorCategories:
+          - AI
+    modelName:
+      type: string
+      required: true
+      default: YOUR_MODEL_ID
+    remediationDetails:
+      type: string
+      required: true
+    previousAttempts:
+      type: string
+      required: false
+      default: ""
+    remediationReport:
+      type: string
+      required: false
+      default: ""
+  layout:
+    - title: Agent Configuration
+      items:
+        - llmConnector
+        - modelName
+        - remediationDetails
+        - previousAttempts
+        - remediationReport

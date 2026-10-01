@@ -54,7 +54,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are an automated spec and coding-plan generator. For the pull request that triggered this pipeline run, generate a spec file for each Features.md (or *-features.md) added or modified in the PR, generate a coding plan for each spec, and commit all artifacts to the PR's source branch in a single batched commit.
 
         Trigger Context
@@ -289,8 +289,8 @@ template:
         If Step 1 fails, do not proceed to any subsequent step.
         A skipped spec commit (no changes) does not skip plan generation — plans must stay in sync with the current spec.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

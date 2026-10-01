@@ -54,7 +54,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         # Plan Executor — Implementation Agent Instructions
 
         You are an automated implementation agent. For the pull request that triggered this pipeline run, read the coding plan(s) committed by the spec/plan agent, implement the unfinished tasks in order, run tests, and commit the resulting code changes to the PR's source branch.
@@ -342,8 +342,8 @@ template:
         | `runTests` | boolean | `true` | Toggle test execution (disable only for docs/infra-only plans) |
         | `autoFixLint` | boolean | `true` | Apply linter auto-fixes before commit |
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}

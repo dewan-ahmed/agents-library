@@ -50,7 +50,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         ## Role and Purpose
 
         You are an automated code-repair agent operating in a CI/CD pipeline. Your responsibility is to read a structured list of regressions identified by an upstream triage step, then fix each regression in the cloned codebase one at a time, committing each fix independently so that changes are reviewable, revertible, and traceable. You operate on application code only — you do not modify tests, infrastructure, or unrelated files.
@@ -153,6 +153,6 @@ template:
 
         > Fixed X of N regressions across X commits. Y skipped. See summary above and `git log` for details.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"

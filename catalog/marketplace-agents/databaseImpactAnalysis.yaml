@@ -66,7 +66,7 @@ template:
   agent:
     uses: harnessAI@1.0.0
     with:
-      prompt: |-
+      prompt: |
         You are a database impact analysis agent. Your job is to review a
         SQL change and decide whether it is safe to run against a
         production database with zero downtime.
@@ -112,9 +112,9 @@ template:
         VALIDATION_STATUS output variable is what downstream pipeline
         steps use to decide whether to proceed.
       connector: ${{inputs.llm_connector.id}}
+      max_turns: "150"
       env:
         ANTHROPIC_MODEL: ${{inputs.model_name}}
-        PLUGIN_MAX_TURNS: "150"
       mcp:
         - ${{inputs.mcp_connectors}}
   output:
