@@ -10,6 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const catalogDir = join(here, "..", "..", "catalog");
 const combosPath = join(catalogDir, "test", "combos.json");
 const AGENT_ACTION = "harnessAI@1.0.0";
+const AGENT_REQUEST_FILE = "/harness/.agent/context/agent-request.json";
 const writeCombos = process.argv.includes("--write-combos");
 const errors = [];
 const warnings = [];
@@ -72,6 +73,17 @@ function validateActionShape(label, agent, declared, raw) {
   }
 }
 
+function walkTypedSteps(node, acc = []) {
+  if (Array.isArray(node)) {
+    node.forEach((item) => walkTypedSteps(item, acc));
+    return acc;
+  }
+  if (!node || typeof node !== "object") return acc;
+  if (typeof node.type === "string" && node.spec && typeof node.spec === "object") acc.push(node);
+  Object.values(node).forEach((value) => walkTypedSteps(value, acc));
+  return acc;
+}
+
 function walkAgentSettings(node, acc = []) {
   if (Array.isArray(node)) {
     node.forEach((item) => walkAgentSettings(item, acc));
@@ -125,6 +137,7 @@ if (existsSync(marketplaceDir)) {
 
 const pipelineFiles = readdirSync(join(catalogDir, "pipelines")).filter((f) => f.endsWith(".pipeline.yaml"));
 const pipelineAgentRefs = new Map();
+const pipelineDocs = new Map();
 for (const file of pipelineFiles) {
   const doc = parseYaml(join(catalogDir, "pipelines", file));
   if (!doc) continue;
@@ -133,8 +146,21 @@ for (const file of pipelineFiles) {
     errors.push(`pipelines/${file}: missing pipeline root`);
     continue;
   }
+  pipelineDocs.set(file, doc);
   if (pipeline.orgIdentifier !== "{{orgId}}") errors.push(`pipelines/${file}: orgIdentifier must be {{orgId}}`);
   if (pipeline.projectIdentifier !== "{{projectId}}") errors.push(`pipelines/${file}: projectIdentifier must be {{projectId}}`);
+  if (!Array.isArray(pipeline.stages) || pipeline.stages.length === 0) {
+    errors.push(`pipelines/${file}: pipeline.stages must be a non-empty list`);
+  }
+  for (const step of walkTypedSteps(pipeline)) {
+    if (step.type !== "Agent") continue;
+    if (typeof step.spec.agentName !== "string" || !step.spec.agentName) {
+      errors.push(`pipelines/${file}: Agent step is missing spec.agentName`);
+    }
+    if (step.spec.agentSettings == null || step.spec.agentSettings === "") {
+      errors.push(`pipelines/${file}: Agent step ${step.spec.agentName ?? "(unnamed)"} is missing spec.agentSettings`);
+    }
+  }
   pipelineAgentRefs.set(file, walkAgentNames(pipeline));
   for (const { name, settings } of walkAgentSettings(pipeline)) {
     const agent = agentDocs.get(name);
@@ -183,6 +209,19 @@ for (const pipeline of catalog.pipelines) {
       agentFile: `catalog/agents/${agentId}.yaml`,
       pipelineFile: `catalog/pipelines/${pipeline.yamlFile}`,
     });
+  }
+  const pipelineDoc = pipelineDocs.get(pipeline.yamlFile);
+  const runCommands = walkTypedSteps(pipelineDoc?.pipeline ?? [])
+    .filter((step) => step.type === "Run" && typeof step.spec.command === "string")
+    .map((step) => step.spec.command)
+    .join("\n");
+  for (const agentId of agentIds) {
+    const prompt = agentDocs.get(agentId)?.agent?.with?.prompt ?? "";
+    if (typeof prompt === "string" && prompt.includes(AGENT_REQUEST_FILE) && !runCommands.includes(AGENT_REQUEST_FILE)) {
+      errors.push(
+        `pipelines/${pipeline.yamlFile}: ${agentId} reads ${AGENT_REQUEST_FILE} but no Run step writes it`,
+      );
+    }
   }
   const refs = pipelineAgentRefs.get(pipeline.yamlFile) ?? [];
   for (const ref of refs) {

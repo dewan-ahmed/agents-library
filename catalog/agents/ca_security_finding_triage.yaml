@@ -91,8 +91,6 @@ agent:
     open_fix_pr:
       type: string
       default: "false"
-    agent_request_b64:
-      type: string
     team_name:
       type: string
     atlassian_cloud_id:

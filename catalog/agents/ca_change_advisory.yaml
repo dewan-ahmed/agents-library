@@ -89,8 +89,6 @@ agent:
       type: string
     jira_project:
       type: string
-    agent_request_b64:
-      type: string
     team_name:
       type: string
     atlassian_cloud_id:

@@ -133,8 +133,9 @@ pipeline:
                       REQUEST_JSON: <+pipeline.variables.request_json>
                     command: |-
                       set -euo pipefail
-                      PREPARED_OUTPUT="$(python3 - <<'PY'
-                      import base64, json, os, sys
+                      python3 - <<'PY'
+                      import json, os, sys
+                      from pathlib import Path
 
                       unresolved_prefix = chr(60) + chr(43)
 
@@ -160,28 +161,11 @@ pipeline:
                       if not isinstance(body, dict):
                           print("request_json must be a JSON object", file=sys.stderr)
                           sys.exit(1)
-                      encoded = base64.b64encode(json.dumps(body, separators=(",", ":")).encode()).decode()
-                      print("REQUEST_B64=" + encoded)
+                      target = Path("/harness/.agent/context/agent-request.json")
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_text(json.dumps(body, indent=2) + "\n")
+                      print("Wrote " + str(target))
                       PY
-                      )"
-                      printf '%s\n' "$PREPARED_OUTPUT"
-                      REQUEST_B64=""
-                      while IFS='=' read -r name value; do
-                        case "$name" in
-                          REQUEST_B64) REQUEST_B64="$value" ;;
-                        esac
-                      done <<EOF
-                      $PREPARED_OUTPUT
-                      EOF
-                      if [ -z "$REQUEST_B64" ]; then
-                        echo "Prepare step failed to produce REQUEST_B64" >&2
-                        exit 1
-                      fi
-                      export REQUEST_B64
-                    outputVariables:
-                      - name: REQUEST_B64
-                        type: String
-                        value: REQUEST_B64
               - step:
                   type: Agent
                   name: Run Runbook Drift
@@ -194,7 +178,6 @@ pipeline:
                         "llmConnector": "<+pipeline.variables.llmConnector>",
                         "team_name": "<+pipeline.variables.team_name>",
                         "modelName": "<+pipeline.variables.modelName>",
-                        "agent_request_b64": "<+execution.steps.prepare_request.output.outputVariables.REQUEST_B64>",
                         "confluence_space": "<+pipeline.variables.confluence_space>",
                         "pipeline_ids": "<+pipeline.variables.pipeline_ids>",
                         "open_docs_pr": "<+pipeline.variables.open_docs_pr>",

@@ -90,8 +90,6 @@ agent:
       type: string
     severity:
       type: string
-    agent_request_b64:
-      type: string
     team_name:
       type: string
     atlassian_cloud_id:
