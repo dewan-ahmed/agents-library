@@ -72,11 +72,10 @@ Leave both Slack fields empty to skip posting. The summary still appears in the 
 
 ### How a run works
 
-1. **Prepare Request** validates `request_json` and base64-encodes it.
-2. **Install MCP Runtimes** writes the Harness PAT to a `0600` file, starts `harness-mcp-v2`, and optionally checks out a team skill pack.
-3. **Agent** reads `/harness/.agent/context/agent-request.json`, uses Harness MCP plus optional Atlassian MCP, writes `/harness/.agent/output/summary.md`.
-4. **Export Summary** prints that file.
-5. **Post Summary To Slack** runs only when a channel or permalink is set.
+1. **Prepare Request** validates `request_json` and writes it to `/harness/.agent/context/agent-request.json` on the shared workspace.
+2. **Agent** reads that file, uses the Harness MCP connector plus an optional Atlassian MCP connector, and writes `/harness/.agent/output/summary.md`.
+3. **Export Summary** prints that file.
+4. **Post Summary To Slack** runs only when a channel or permalink is set.
 
 ### Request JSON by agent
 
