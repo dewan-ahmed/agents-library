@@ -538,7 +538,7 @@
       "harnessAgentId": "ca_pipeline_failure_rca",
       "name": "Pipeline Failure RCA",
       "summary": "Diagnoses one failed Harness execution from its failed step, logs, commit or PR, and optional Confluence runbook, then opens a fix PR only when explicitly enabled.",
-      "description": "A Harness-first RCA agent for CI and CD failures. It uses harness-mcp-v2 to inspect the pinned execution, first failed step, logs, repository diff, and relevant files. An optional Atlassian MCP connector adds a bounded Confluence runbook lookup. It never retries or interrupts a pipeline and can open at most one low-risk fix PR behind an explicit flag.",
+      "description": "A Harness-first RCA agent for CI and CD failures. It uses the worker agent's Harness MCP to inspect the pinned execution, first failed step, logs, repository diff, and relevant files. An optional Atlassian MCP connector adds a bounded Confluence runbook lookup. It never retries or interrupts a pipeline and can open at most one low-risk fix PR behind an explicit flag.",
       "lifecycle": [
         "build",
         "release"
@@ -588,14 +588,6 @@
           "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
         },
         {
-          "key": "harness_api_key",
-          "label": "Harness PAT",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "agentSettings.harness_api_key",
-          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
-        },
-        {
           "key": "request_json",
           "label": "Request payload",
           "kind": "input",
@@ -622,7 +614,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT with execution, pipeline, log, and repository read access",
         "Optional Atlassian MCP connector for Confluence runbooks",
         "Pull-request permission only when open_fix_pr is true"
       ],
@@ -704,14 +695,6 @@
           "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
         },
         {
-          "key": "harness_api_key",
-          "label": "Harness PAT",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "agentSettings.harness_api_key",
-          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
-        },
-        {
           "key": "request_json",
           "label": "Request payload",
           "kind": "input",
@@ -738,7 +721,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT with execution, repository, pipeline, STO, and SCS read access",
         "Optional Atlassian MCP connector for Confluence and Jira"
       ],
       "keywords": [
@@ -818,14 +800,6 @@
           "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
         },
         {
-          "key": "harness_api_key",
-          "label": "Harness PAT",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "agentSettings.harness_api_key",
-          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
-        },
-        {
           "key": "request_json",
           "label": "Request payload",
           "kind": "input",
@@ -852,7 +826,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT with STO/SCS finding and repository read access",
         "Optional Atlassian MCP connector for Jira",
         "Pull-request permission only when open_fix_pr is true"
       ],
@@ -933,14 +906,6 @@
           "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
         },
         {
-          "key": "harness_api_key",
-          "label": "Harness PAT",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "agentSettings.harness_api_key",
-          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
-        },
-        {
           "key": "request_json",
           "label": "Request payload",
           "kind": "input",
@@ -967,7 +932,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT with pipeline and repository read access",
         "Atlassian MCP connector with Confluence read access",
         "Docs repository only when open_docs_pr is true"
       ],
@@ -1045,14 +1009,6 @@
           "note": "MCP connector to https://mcp.atlassian.com/v2/mcp. Enables Confluence and Jira evidence; the agent continues Harness-only when omitted."
         },
         {
-          "key": "harness_api_key",
-          "label": "Harness PAT",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "agentSettings.harness_api_key",
-          "note": "Used by the local harness-mcp-v2 server. Scope the PAT to only the reads and optional PR writes this agent needs."
-        },
-        {
           "key": "request_json",
           "label": "Request payload",
           "kind": "input",
@@ -1079,7 +1035,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT with execution read access",
         "Optional Atlassian MCP connector for the Confluence status template",
         "Optional Slack bot token for posting"
       ],
@@ -1881,10 +1836,6 @@
         "team_name",
         "request_json",
         "atlassian_cloud_id",
-        "harness_api_key_secret",
-        "harness_account_id",
-        "harness_org",
-        "harness_project",
         "slack_channel_id",
         "slack_thread_ts",
         "slack_bot_token_secret",
@@ -1917,7 +1868,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT",
         "Optional Atlassian MCP connector",
         "Optional Slack bot token"
       ],
@@ -1929,14 +1879,6 @@
           "requirement": "required",
           "field": "pipeline.variables.request_json",
           "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
-        },
-        {
-          "key": "harness_api_key_secret",
-          "label": "Harness PAT secret expression",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "pipeline.variables.harness_api_key_secret",
-          "note": "Pass a Harness secret expression, never a literal token."
         },
         {
           "key": "slack",
@@ -1963,10 +1905,6 @@
         "team_name",
         "request_json",
         "atlassian_cloud_id",
-        "harness_api_key_secret",
-        "harness_account_id",
-        "harness_org",
-        "harness_project",
         "slack_channel_id",
         "slack_thread_ts",
         "slack_bot_token_secret",
@@ -1999,7 +1937,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT",
         "Optional Atlassian MCP connector",
         "Optional Slack bot token"
       ],
@@ -2011,14 +1948,6 @@
           "requirement": "required",
           "field": "pipeline.variables.request_json",
           "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
-        },
-        {
-          "key": "harness_api_key_secret",
-          "label": "Harness PAT secret expression",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "pipeline.variables.harness_api_key_secret",
-          "note": "Pass a Harness secret expression, never a literal token."
         },
         {
           "key": "slack",
@@ -2045,10 +1974,6 @@
         "team_name",
         "request_json",
         "atlassian_cloud_id",
-        "harness_api_key_secret",
-        "harness_account_id",
-        "harness_org",
-        "harness_project",
         "slack_channel_id",
         "slack_thread_ts",
         "slack_bot_token_secret",
@@ -2081,7 +2006,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT",
         "Optional Atlassian MCP connector",
         "Optional Slack bot token"
       ],
@@ -2093,14 +2017,6 @@
           "requirement": "required",
           "field": "pipeline.variables.request_json",
           "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
-        },
-        {
-          "key": "harness_api_key_secret",
-          "label": "Harness PAT secret expression",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "pipeline.variables.harness_api_key_secret",
-          "note": "Pass a Harness secret expression, never a literal token."
         },
         {
           "key": "slack",
@@ -2127,10 +2043,6 @@
         "team_name",
         "request_json",
         "atlassian_cloud_id",
-        "harness_api_key_secret",
-        "harness_account_id",
-        "harness_org",
-        "harness_project",
         "slack_channel_id",
         "slack_thread_ts",
         "slack_bot_token_secret",
@@ -2164,7 +2076,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT",
         "Atlassian MCP connector",
         "Optional Slack bot token"
       ],
@@ -2176,14 +2087,6 @@
           "requirement": "required",
           "field": "pipeline.variables.request_json",
           "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
-        },
-        {
-          "key": "harness_api_key_secret",
-          "label": "Harness PAT secret expression",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "pipeline.variables.harness_api_key_secret",
-          "note": "Pass a Harness secret expression, never a literal token."
         },
         {
           "key": "slack",
@@ -2210,10 +2113,6 @@
         "team_name",
         "request_json",
         "atlassian_cloud_id",
-        "harness_api_key_secret",
-        "harness_account_id",
-        "harness_org",
-        "harness_project",
         "slack_channel_id",
         "slack_thread_ts",
         "slack_bot_token_secret",
@@ -2245,7 +2144,6 @@
       ],
       "prerequisites": [
         "LLM connector",
-        "Harness PAT",
         "Optional Atlassian MCP connector",
         "Optional Slack bot token"
       ],
@@ -2257,14 +2155,6 @@
           "requirement": "required",
           "field": "pipeline.variables.request_json",
           "note": "Exact payload examples are documented in docs/customer-agent-usage.md. Invalid JSON fails in the prepare step."
-        },
-        {
-          "key": "harness_api_key_secret",
-          "label": "Harness PAT secret expression",
-          "kind": "secret",
-          "requirement": "required",
-          "field": "pipeline.variables.harness_api_key_secret",
-          "note": "Pass a Harness secret expression, never a literal token."
         },
         {
           "key": "slack",

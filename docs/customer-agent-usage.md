@@ -20,7 +20,7 @@ Six custom agents are meant to run in a customer's Harness project. They are tag
 These five use:
 
 - a **Harness LLM / model connector**
-- a **Harness PAT** (local `harness-mcp-v2` stdio MCP)
+- the worker agent's built-in **Harness MCP**
 - an optional **Atlassian MCP connector** for Confluence and Jira
 - optional **Slack** posting from the pipeline, not from the agent
 
@@ -46,7 +46,6 @@ If the MCP connector is omitted, agents still run. They must write `Confluence n
 Every credential is a Harness **secret expression**, never a literal:
 
 ```
-harness_api_key_secret: <+secrets.getValue("harness_pat")>
 slack_bot_token_secret: <+secrets.getValue("YOUR_SLACK_BOT_TOKEN")>
 ```
 
@@ -54,7 +53,6 @@ Always pass:
 
 - `llmConnector` and `modelName`
 - `team_name`
-- `harness_api_key_secret`, `harness_account_id`, `harness_org`, `harness_project`
 - `request_json` (see shapes below)
 
 Pass when using Confluence or Jira:

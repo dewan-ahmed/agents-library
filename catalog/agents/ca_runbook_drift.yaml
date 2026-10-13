@@ -11,11 +11,6 @@ agent:
       Documented Harness pipeline ids: ${{inputs.pipeline_ids}}
       open_docs_pr: ${{inputs.open_docs_pr}}
       Docs repo for the optional PR: ${{inputs.docs_repo_id}}
-      After reading `/harness/.agent/context/agent-request.json`, load matching
-      team skills with the Skill tool (or Read on
-      `/harness/.agent/plugins/team-skills/skills/<name>/SKILL.md`).
-      Never use Bash ls/cat/find to decide whether skills exist.
-      Team skills override the generic steps below where they conflict.
 
       Never print secrets. If a tool fails once, record the exact error and
       continue. Do not loop. Do not guess identifiers; name missing evidence.
@@ -28,7 +23,7 @@ agent:
       allowed write is one docs pull request, and only when open_docs_pr is true.
 
       Steps
-      1. Load skills. One bounded searchConfluence query in the configured space
+      1. One bounded searchConfluence query in the configured space
          for runbook or operations pages. Fetch at most the top 5 pages with
          getConfluenceContent.
       2. Extract what the docs claim: pipeline names and ids, stage and step
@@ -56,13 +51,12 @@ agent:
       8. *Next step:* the single highest-value doc fix
     connector: ${{inputs.llmConnector.id}}
     max_turns: "100"
-    allowed_tools: mcp__harness__*,mcp__*__searchConfluence,mcp__*__getConfluenceContent,mcp__*__searchJiraIssuesUsingJql,mcp__*__getJiraIssue,mcp__*__getAccessibleAtlassianResources,mcp__*__atlassianUserInfo,mcp__*__executeRead,mcp__*__search,mcp__*__discover,ToolSearch,Skill,Read,Write,Bash
+    allowed_tools: mcp__harness__*,mcp__*__searchConfluence,mcp__*__getConfluenceContent,mcp__*__searchJiraIssuesUsingJql,mcp__*__getJiraIssue,mcp__*__getAccessibleAtlassianResources,mcp__*__atlassianUserInfo,mcp__*__executeRead,mcp__*__search,mcp__*__discover,ToolSearch,Read,Write,Bash
     allowed_domains: registry.npmjs.org,pypi.org,files.pythonhosted.org,*.harness.io,*.atlassian.net,mcp.atlassian.com,nodejs.org
     output_file: /harness/.agent/output/summary.md
     env:
       ANTHROPIC_MODEL: ${{inputs.modelName}}
     mcp:
-      - harness_map
       - ${{inputs.mcpConnectors}}
   inputs:
     llmConnector:
@@ -99,29 +93,6 @@ agent:
     team_name:
       type: string
     atlassian_cloud_id:
-      type: string
-    harness_api_key:
-      type: string
-    harness_base_url:
-      type: string
-      default: https://app.harness.io
-    harness_account_id:
-      type: string
-    harness_org:
-      type: string
-    harness_project:
-      type: string
-    team_skill_git_url:
-      type: string
-    team_skill_git_ref:
-      type: string
-      default: main
-    team_skill_path:
-      type: string
-    plugin_git_user:
-      type: string
-      default: token
-    plugin_git_token:
       type: string
   layout:
     - title: Agent Configuration
