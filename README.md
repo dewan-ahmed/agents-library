@@ -60,13 +60,10 @@ rebuilds a local image (`PLUGIN_NO_PUSH=true`), rescans, and can open a GitHub P
 
 The first five share one architecture:
 
-- A first step installs Node for `harness-mcp-v2`, writes the Harness PAT to a
-  `0600` file, and emits `/harness/.agent/mcp-servers.json`.
+- Harness MCP comes with the worker agent. These pipelines do not install
+  `harness-mcp-v2` or pass a Harness PAT.
 - Connector-backed Atlassian MCP (type `Mcp`, not a native Confluence connector)
   is mounted through `mcpConnectors`.
-- An optional team skill pack is sparse-checked out into
-  `/harness/.agent/plugins/team-skills`, and those skills override the inline
-  instructions.
 - The agent writes `/harness/.agent/output/summary.md`; the pipeline exports it
   and decides whether to post to Slack. Agents never post.
 

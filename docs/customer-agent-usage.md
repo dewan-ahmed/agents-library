@@ -20,7 +20,7 @@ Six custom agents are meant to run in a customer's Harness project. They are tag
 These five use:
 
 - a **Harness LLM / model connector**
-- a **Harness PAT** (local `harness-mcp-v2` stdio MCP)
+- the worker agent's built-in **Harness MCP**
 - an optional **Atlassian MCP connector** for Confluence and Jira
 - optional **Slack** posting from the pipeline, not from the agent
 
@@ -46,7 +46,6 @@ If the MCP connector is omitted, agents still run. They must write `Confluence n
 Every credential is a Harness **secret expression**, never a literal:
 
 ```
-harness_api_key_secret: <+secrets.getValue("harness_pat")>
 slack_bot_token_secret: <+secrets.getValue("YOUR_SLACK_BOT_TOKEN")>
 ```
 
@@ -54,7 +53,6 @@ Always pass:
 
 - `llmConnector` and `modelName`
 - `team_name`
-- `harness_api_key_secret`, `harness_account_id`, `harness_org`, `harness_project`
 - `request_json` (see shapes below)
 
 Pass when using Confluence or Jira:
@@ -72,11 +70,10 @@ Leave both Slack fields empty to skip posting. The summary still appears in the 
 
 ### How a run works
 
-1. **Prepare Request** validates `request_json` and base64-encodes it.
-2. **Install MCP Runtimes** writes the Harness PAT to a `0600` file, starts `harness-mcp-v2`, and optionally checks out a team skill pack.
-3. **Agent** reads `/harness/.agent/context/agent-request.json`, uses Harness MCP plus optional Atlassian MCP, writes `/harness/.agent/output/summary.md`.
-4. **Export Summary** prints that file.
-5. **Post Summary To Slack** runs only when a channel or permalink is set.
+1. **Prepare Request** validates `request_json` and writes it to `/harness/.agent/context/agent-request.json` on the shared workspace.
+2. **Agent** reads that file, uses the Harness MCP connector plus an optional Atlassian MCP connector, and writes `/harness/.agent/output/summary.md`.
+3. **Export Summary** prints that file.
+4. **Post Summary To Slack** runs only when a channel or permalink is set.
 
 ### Request JSON by agent
 

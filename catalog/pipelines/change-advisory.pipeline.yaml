@@ -39,27 +39,6 @@ pipeline:
       description: Atlassian cloudId, required only when using Confluence or Jira.
       required: false
       value: <+input>
-    - name: harness_api_key_secret
-      type: String
-      description: Expression that resolves to a Harness PAT, for example <+secrets.getValue("harness_pat")>.
-      required: true
-      value: <+input>
-    - name: harness_base_url
-      type: String
-      required: true
-      value: <+input>.default(https://app.harness.io)
-    - name: harness_account_id
-      type: String
-      required: true
-      value: <+input>
-    - name: harness_org
-      type: String
-      required: true
-      value: <+input>
-    - name: harness_project
-      type: String
-      required: true
-      value: <+input>
     - name: slack_channel_id
       type: String
       description: Slack channel id. Leave empty to skip posting.
@@ -73,28 +52,6 @@ pipeline:
     - name: slack_bot_token_secret
       type: String
       description: Expression that resolves to a Slack bot token with chat:write.
-      required: false
-      value: <+input>
-    - name: team_skill_git_url
-      type: String
-      description: Optional git repo holding a team skill pack.
-      required: false
-      value: <+input>
-    - name: team_skill_git_ref
-      type: String
-      required: false
-      value: <+input>.default(main)
-    - name: team_skill_path
-      type: String
-      required: false
-      value: <+input>
-    - name: plugin_git_user
-      type: String
-      required: false
-      value: <+input>.default(token)
-    - name: plugin_git_token_secret
-      type: String
-      description: Expression that resolves to a git PAT for the skill pack checkout.
       required: false
       value: <+input>
   stages:
@@ -123,8 +80,9 @@ pipeline:
                       REQUEST_JSON: <+pipeline.variables.request_json>
                     command: |-
                       set -euo pipefail
-                      PREPARED_OUTPUT="$(python3 - <<'PY'
-                      import base64, json, os, sys
+                      python3 - <<'PY'
+                      import json, os, sys
+                      from pathlib import Path
 
                       unresolved_prefix = chr(60) + chr(43)
 
@@ -150,28 +108,11 @@ pipeline:
                       if not isinstance(body, dict):
                           print("request_json must be a JSON object", file=sys.stderr)
                           sys.exit(1)
-                      encoded = base64.b64encode(json.dumps(body, separators=(",", ":")).encode()).decode()
-                      print("REQUEST_B64=" + encoded)
+                      target = Path("/harness/.agent/context/agent-request.json")
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_text(json.dumps(body, indent=2) + "\n")
+                      print("Wrote " + str(target))
                       PY
-                      )"
-                      printf '%s\n' "$PREPARED_OUTPUT"
-                      REQUEST_B64=""
-                      while IFS='=' read -r name value; do
-                        case "$name" in
-                          REQUEST_B64) REQUEST_B64="$value" ;;
-                        esac
-                      done <<EOF
-                      $PREPARED_OUTPUT
-                      EOF
-                      if [ -z "$REQUEST_B64" ]; then
-                        echo "Prepare step failed to produce REQUEST_B64" >&2
-                        exit 1
-                      fi
-                      export REQUEST_B64
-                    outputVariables:
-                      - name: REQUEST_B64
-                        type: String
-                        value: REQUEST_B64
               - step:
                   type: Agent
                   name: Run Change Advisory
@@ -184,20 +125,9 @@ pipeline:
                         "llmConnector": "<+pipeline.variables.llmConnector>",
                         "team_name": "<+pipeline.variables.team_name>",
                         "modelName": "<+pipeline.variables.modelName>",
-                        "agent_request_b64": "<+execution.steps.prepare_request.output.outputVariables.REQUEST_B64>",
                         "confluence_space": "<+pipeline.variables.confluence_space>",
                         "jira_project": "<+pipeline.variables.jira_project>",
-                        "atlassian_cloud_id": "<+pipeline.variables.atlassian_cloud_id>",
-                        "harness_api_key": "<+pipeline.variables.harness_api_key_secret>",
-                        "harness_base_url": "<+pipeline.variables.harness_base_url>",
-                        "harness_account_id": "<+pipeline.variables.harness_account_id>",
-                        "harness_org": "<+pipeline.variables.harness_org>",
-                        "harness_project": "<+pipeline.variables.harness_project>",
-                        "team_skill_git_url": "<+pipeline.variables.team_skill_git_url>",
-                        "team_skill_git_ref": "<+pipeline.variables.team_skill_git_ref>",
-                        "team_skill_path": "<+pipeline.variables.team_skill_path>",
-                        "plugin_git_user": "<+pipeline.variables.plugin_git_user>",
-                        "plugin_git_token": "<+pipeline.variables.plugin_git_token_secret>"
+                        "atlassian_cloud_id": "<+pipeline.variables.atlassian_cloud_id>"
                       }
               - step:
                   type: Run
