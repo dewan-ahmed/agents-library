@@ -66,6 +66,11 @@ pipeline:
       type: String
       required: true
       value: <+input>.default(Harness CI)
+    - name: gitUsername
+      type: String
+      description: GitHub username used as the Basic-Auth user when pushing the fix branch (paired with scm_token_secret).
+      required: true
+      value: <+input>.default(dewandemo)
     - name: repoOwner
       type: String
       description: GitHub org or user that owns the repository. Used only when opening a pull request.
@@ -332,6 +337,34 @@ pipeline:
                                 remediationReport: <+execution.steps.Remediation_Steps.steps.fetch_vulnerability_details.output.outputVariables.JSON_REPORT>
                         - step:
                             type: Run
+                            name: Align Go Toolchain Round 1
+                            identifier: align_go_toolchain_round_1
+                            spec:
+                              image: golang:alpine
+                              shell: Sh
+                              command: |-
+                                set -e
+                                cd <+pipeline.variables.dockerContext>
+                                if [ ! -f go.mod ]; then
+                                  echo "No go.mod in build context; nothing to align."
+                                  exit 0
+                                fi
+                                export GOTOOLCHAIN=local GOFLAGS=-mod=mod
+                                go mod tidy
+                                REQUIRED=$(awk '/^go /{print $2; exit}' go.mod | cut -d. -f1,2)
+                                echo "Dependencies require Go >= $REQUIRED"
+                                for f in $(find . -maxdepth 3 -name 'Dockerfile*' -type f); do
+                                  CURRENT=$(sed -nE 's/.*golang:([0-9]+\.[0-9]+).*/\1/p; s/.*GO_VERSION=([0-9]+\.[0-9]+).*/\1/p' "$f" | head -1)
+                                  [ -z "$CURRENT" ] && continue
+                                  if [ "$(printf '%s\n%s\n' "$CURRENT" "$REQUIRED" | sort -V | head -1)" != "$REQUIRED" ]; then
+                                    sed -i -E "s/golang:[0-9]+\.[0-9]+(\.[0-9]+)?/golang:$REQUIRED/g; s/(GO_VERSION=)[0-9]+\.[0-9]+(\.[0-9]+)?/\1$REQUIRED/g" "$f"
+                                    echo "$f: Go $CURRENT -> $REQUIRED"
+                                  else
+                                    echo "$f: Go $CURRENT already satisfies $REQUIRED"
+                                  fi
+                                done
+                        - step:
+                            type: Run
                             name: Show Dockerfile After Round 1
                             identifier: Show_Dockerfile_Fixed
                             spec:
@@ -543,6 +576,37 @@ pipeline:
                               stageStatus: Failure
                               condition: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.NEEDS_ROUND2> == "true"
                         - step:
+                            type: Run
+                            name: Align Go Toolchain Round 2
+                            identifier: align_go_toolchain_round_2
+                            spec:
+                              image: golang:alpine
+                              shell: Sh
+                              command: |-
+                                set -e
+                                cd <+pipeline.variables.dockerContext>
+                                if [ ! -f go.mod ]; then
+                                  echo "No go.mod in build context; nothing to align."
+                                  exit 0
+                                fi
+                                export GOTOOLCHAIN=local GOFLAGS=-mod=mod
+                                go mod tidy
+                                REQUIRED=$(awk '/^go /{print $2; exit}' go.mod | cut -d. -f1,2)
+                                echo "Dependencies require Go >= $REQUIRED"
+                                for f in $(find . -maxdepth 3 -name 'Dockerfile*' -type f); do
+                                  CURRENT=$(sed -nE 's/.*golang:([0-9]+\.[0-9]+).*/\1/p; s/.*GO_VERSION=([0-9]+\.[0-9]+).*/\1/p' "$f" | head -1)
+                                  [ -z "$CURRENT" ] && continue
+                                  if [ "$(printf '%s\n%s\n' "$CURRENT" "$REQUIRED" | sort -V | head -1)" != "$REQUIRED" ]; then
+                                    sed -i -E "s/golang:[0-9]+\.[0-9]+(\.[0-9]+)?/golang:$REQUIRED/g; s/(GO_VERSION=)[0-9]+\.[0-9]+(\.[0-9]+)?/\1$REQUIRED/g" "$f"
+                                    echo "$f: Go $CURRENT -> $REQUIRED"
+                                  else
+                                    echo "$f: Go $CURRENT already satisfies $REQUIRED"
+                                  fi
+                                done
+                            when:
+                              stageStatus: Success
+                              condition: <+execution.steps.Remediation_Steps.steps.fetch_sto_vulnerabilities_round2.output.outputVariables.NEEDS_ROUND2> == "true"
+                        - step:
                             type: BuildAndPushECR
                             name: Rebuild Image Round 2
                             identifier: rebuild_image_round_2
@@ -659,7 +723,10 @@ pipeline:
                                 cd /harness
                                 git config user.email "<+pipeline.variables.gitUserEmail>"
                                 git config user.name "<+pipeline.variables.gitUserName>"
-                                git add <+pipeline.variables.dockerfile> .trivyignore || true
+                                for f in <+pipeline.variables.dockerfile> $(git ls-files -m -o --exclude-standard -- 'Dockerfile*' '*/Dockerfile*' .trivyignore go.mod go.sum); do
+                                  if [ -e "$f" ]; then git add -- "$f"; fi
+                                done
+                                git status --short
                                 if git diff --cached --quiet; then
                                   echo "No Dockerfile or ignore-file changes to commit."
                                   echo "VULN_FIX_BRANCH=" >> $HARNESS_OUTPUT_FILE
@@ -670,8 +737,11 @@ pipeline:
                                 git commit -m "fix: remediate container vulnerabilities - build <+pipeline.sequenceId>
 
                                 Automated vulnerability remediation applied by the catalog Container Vulnerability Remediation agent."
+                                git remote set-url origin "https://<+pipeline.variables.gitUsername>:${GH_TOKEN}@github.com/<+pipeline.variables.repoOwner>/<+pipeline.variables.repoName>.git"
                                 git push origin "$VULN_FIX_BRANCH"
                                 echo "VULN_FIX_BRANCH=$VULN_FIX_BRANCH" >> $HARNESS_OUTPUT_FILE
+                              envVariables:
+                                GH_TOKEN: <+pipeline.variables.scm_token_secret>
                               outputVariables:
                                 - name: VULN_FIX_BRANCH
                                   type: String

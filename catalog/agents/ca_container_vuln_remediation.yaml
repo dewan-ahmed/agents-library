@@ -53,6 +53,13 @@ agent:
         - Package not used at runtime
         - Mitigated by other controls
 
+      ### Step 4: Keep the Toolchain Compatible
+      Every dependency version you choose must build with the toolchain in the builder image. A fix that breaks the rebuild is worse than no fix.
+      - **Go**: for each module version you set in go.mod, read its minimum Go version with `curl -s https://proxy.golang.org/<module-path-lowercase>/@v/<version>.mod | grep '^go '`. Set the builder image (for example `golang:<X>-alpine`, `ARG GO_VERSION=<X>`) and the go.mod `go` directive to at least the highest version found. Prefer the current stable Go release over an older "conservative" one.
+      - **Node**: check `engines.node` of upgraded packages and pick a `node:<X>` image that satisfies it.
+      - **Python**: check `Requires-Python` of upgraded packages and pick a `python:<X>` image that satisfies it.
+      - If you cannot verify a minimum, choose the lowest version that contains the CVE fix rather than the latest release.
+
       ## Output Requirements
 
       ### 1. Produce a Single, Complete Fix
@@ -81,6 +88,7 @@ agent:
       4. Prefer Alpine-based images when the application supports them
       5. If switching to Alpine breaks the build, document why and use Strategy B instead
       6. Do not perform git operations. A downstream pipeline step commits and opens the PR.
+      7. Never leave the builder toolchain older than the minimum required by any dependency version you set
 
       ## Anti-Patterns to Avoid
       - Making one small change and waiting for rescan
